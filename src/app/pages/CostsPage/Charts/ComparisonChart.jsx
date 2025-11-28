@@ -3,6 +3,7 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend, Title } from "chart.js";
 import Grid from "@mui/material/Unstable_Grid2";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
+import Box from "@mui/material/Box";
 
 // ✅ Registrar componentes necesarios para Pie Chart
 ChartJS.register(ArcElement, Tooltip, Legend, Title);
@@ -112,6 +113,34 @@ export default function ComparisonChart({ savedProjects }) {
 		},
 	};
 
+	// Definición de categorías para la leyenda global
+	const categories = [
+		{
+			label: "Muros y Columnas",
+			color: categoryColors.murosYColumnas.bg,
+		},
+		{
+			label: "Techos",
+			color: categoryColors.techos.bg,
+		},
+		{
+			label: "Puertas y Ventanas",
+			color: categoryColors.puertasYVentanas.bg,
+		},
+		{
+			label: "Revestimientos",
+			color: categoryColors.revestimientos.bg,
+		},
+		{
+			label: "Baños",
+			color: categoryColors.banos.bg,
+		},
+		{
+			label: "Instalaciones Eléc. y Sanit.",
+			color: categoryColors.instalaciones.bg,
+		},
+	];
+
 	// Crear datos para cada proyecto
 	const createPieData = (project) => {
 		const costs = calculateCostsByCategory(
@@ -161,20 +190,13 @@ export default function ComparisonChart({ savedProjects }) {
 		};
 	};
 
-	// Opciones para cada gráfico circular
+	// Opciones para cada gráfico circular (SIN leyenda individual)
 	const pieOptions = {
 		responsive: true,
 		maintainAspectRatio: true,
 		plugins: {
 			legend: {
-				position: "bottom",
-				labels: {
-					font: {
-						size: 11,
-					},
-					padding: 10,
-					boxWidth: 15,
-				},
+				display: false, // ✅ Ocultar leyenda individual
 			},
 			tooltip: {
 				callbacks: {
@@ -198,99 +220,151 @@ export default function ComparisonChart({ savedProjects }) {
 	};
 
 	return (
-		<Grid container spacing={3}>
-			{savedProjects.map((project, index) => {
-				const pieData = createPieData(project);
+		<>
+			<Grid container spacing={3}>
+				{savedProjects.map((project, index) => {
+					const pieData = createPieData(project);
 
-				return (
-					<Grid
-						key={project.id}
-						xs={12}
-						sm={6}
-						md={
-							savedProjects.length === 1
-								? 12
-								: savedProjects.length === 2
-								? 6
-								: 4
-						}
-					>
-						<Paper
-							elevation={3}
-							sx={{
-								p: 2,
-								height: "100%",
-								display: "flex",
-								flexDirection: "column",
-								alignItems: "center",
-							}}
+					return (
+						<Grid
+							key={project.id}
+							xs={12}
+							sm={6}
+							md={
+								savedProjects.length === 1
+									? 12
+									: savedProjects.length === 2
+									? 6
+									: 4
+							}
 						>
-							<Typography
-								variant="h6"
+							<Paper
+								elevation={3}
 								sx={{
-									mb: 1,
-									fontWeight: 600,
-									color: "#1976d2",
-									textAlign: "center",
-								}}
-							>
-								{project.name}
-							</Typography>
-
-							<Typography
-								variant="body2"
-								sx={{
-									mb: 2,
-									fontWeight: 500,
-									color: "#666",
-									textAlign: "center",
-								}}
-							>
-								Costo Total: S/{" "}
-								{new Intl.NumberFormat("es-PE", {
-									minimumFractionDigits: 2,
-									maximumFractionDigits: 2,
-								}).format(pieData.totalCost)}
-							</Typography>
-
-							<div
-								style={{
-									width: "100%",
-									maxWidth: "350px",
-									height: "350px",
+									p: 2,
+									height: "100%",
 									display: "flex",
-									justifyContent: "center",
+									flexDirection: "column",
 									alignItems: "center",
 								}}
 							>
-								<Pie data={pieData} options={pieOptions} />
-							</div>
-						</Paper>
-					</Grid>
-				);
-			})}
+								<Typography
+									variant="h6"
+									sx={{
+										mb: 1,
+										fontWeight: 600,
+										color: "#1976d2",
+										textAlign: "center",
+									}}
+								>
+									{project.name}
+								</Typography>
 
-			{/* Leyenda global explicativa */}
-			<Grid xs={12}>
-				<Paper
-					elevation={1}
+								<Typography
+									variant="body2"
+									sx={{
+										mb: 2,
+										fontWeight: 500,
+										color: "#666",
+										textAlign: "center",
+									}}
+								>
+									Costo Total: S/{" "}
+									{new Intl.NumberFormat("es-PE", {
+										minimumFractionDigits: 2,
+										maximumFractionDigits: 2,
+									}).format(pieData.totalCost)}
+								</Typography>
+
+								<div
+									style={{
+										width: "100%",
+										maxWidth: "350px",
+										height: "350px",
+										display: "flex",
+										justifyContent: "center",
+										alignItems: "center",
+									}}
+								>
+									<Pie data={pieData} options={pieOptions} />
+								</div>
+							</Paper>
+						</Grid>
+					);
+				})}
+			</Grid>
+
+			{/* ✅ Leyenda Global Única */}
+			<Paper
+				elevation={2}
+				sx={{
+					p: 3,
+					mt: 3,
+					backgroundColor: "#f8f9fa",
+				}}
+			>
+				<Typography
+					variant="h6"
 					sx={{
-						p: 2,
-						mt: 2,
-						backgroundColor: "#f5f5f5",
+						fontWeight: 600,
+						mb: 2,
+						color: "#333",
+						textAlign: "center",
 					}}
 				>
-					<Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
-						📊 Comparación de Distribución de Costos
-					</Typography>
-					<Typography variant="body2" color="text.secondary">
-						Cada gráfico circular muestra cómo se distribuyen los
-						costos en cada proyecto. Los colores representan las
-						mismas categorías en todos los proyectos para facilitar
-						la comparación.
-					</Typography>
-				</Paper>
-			</Grid>
-		</Grid>
+					📊 Categorías de Costos
+				</Typography>
+
+				<Box
+					sx={{
+						display: "flex",
+						flexWrap: "wrap",
+						justifyContent: "center",
+						gap: 2,
+					}}
+				>
+					{categories.map((category, index) => (
+						<Box
+							key={index}
+							sx={{
+								display: "flex",
+								alignItems: "center",
+								gap: 1,
+							}}
+						>
+							<Box
+								sx={{
+									width: 20,
+									height: 20,
+									backgroundColor: category.color,
+									borderRadius: "4px",
+									flexShrink: 0,
+								}}
+							/>
+							<Typography
+								variant="body2"
+								sx={{
+									color: "#555",
+									fontWeight: 500,
+								}}
+							>
+								{category.label}
+							</Typography>
+						</Box>
+					))}
+				</Box>
+
+				<Typography
+					variant="body2"
+					color="text.secondary"
+					sx={{ mt: 2, textAlign: "center" }}
+				>
+					Cada gráfico circular muestra cómo se distribuyen los costos
+					en cada proyecto. Los colores representan las mismas
+					categorías en todos los proyectos para facilitar la
+					comparación.
+				</Typography>
+			</Paper>
+		</>
 	);
 }

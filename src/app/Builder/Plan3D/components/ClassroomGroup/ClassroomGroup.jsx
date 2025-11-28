@@ -90,7 +90,7 @@ export default function ClassroomGroup({
 		onHoverEnd?.();
 	};
 
-	console.log("classroom detalles", classroom.walls);
+	//console.log("classroom detalles", classroom);
 
 	return (
 		<group
@@ -137,7 +137,7 @@ export default function ClassroomGroup({
 			{/* Componentes existentes */}
 			{/* <Walls walls={classroom.walls} level={level} index={index} /> */}
 			<Columns columns={classroom.columns} />
-			<Bigas bigas={classroom.bigas} />
+			{/* <Bigas bigas={classroom.bigas} /> */}
 
 			{/* <Roof
 					position={classroom.roof.position}

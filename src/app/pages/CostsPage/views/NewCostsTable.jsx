@@ -59,7 +59,7 @@ function VersionTable({
 	const VAR_PRECIO_MT2 = 60;
 	const [loading, setLoading] = useState(false);
 
-	const area_total = 3568.72;
+	const area_total = 3000;
 	//JSON.parse(el.build_data).result_data.area_total;
 
 	// const areaMt2Inicial = VAR_PRECIO_MT2 * numberOfClassrooms.inicial;

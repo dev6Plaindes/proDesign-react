@@ -6,6 +6,8 @@ import { planSlice } from "./planes";
 import { projectSlice } from "./projects/projectSlice";
 import { distributionSlice } from "./distribution/distributionSlice";
 import { ambienceSlice } from "./distribution/ambienceSlice";
+import exportReducer from "./features/exportSlice";
+import view3DReducer from "./features/view3DSlice";
 
 export const store = configureStore({
 	reducer: {
@@ -17,5 +19,7 @@ export const store = configureStore({
 		project: projectSlice.reducer,
 		distribution: distributionSlice.reducer,
 		ambience: ambienceSlice.reducer,
+		export: exportReducer,
+		view3D: view3DReducer,
 	},
 });

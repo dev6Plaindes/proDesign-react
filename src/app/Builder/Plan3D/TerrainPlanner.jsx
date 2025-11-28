@@ -3,6 +3,8 @@ import { Building2, AlertCircle, Upload, X } from "lucide-react";
 import { Box, Button, Grid, Typography } from "@mui/material";
 import { useDispatch, useSelector } from "react-redux";
 import DxfWriter from "dxf-writer";
+import { resetExport } from "../../../redux/features/exportSlice";
+import { setVista3DData } from "../../../redux/features/view3DSlice";
 
 export default function TerrainPlanner({ school }) {
 	const [coordinates, setCoordinates] = useState([]);
@@ -34,21 +36,23 @@ export default function TerrainPlanner({ school }) {
 	const [hoveredSecundaria, setHoveredSecundaria] = useState(null);
 	const [hoveredBano, setHoveredBano] = useState(null);
 	const [hoveredEscalera, setHoveredEscalera] = useState(null);
+	const dispatch = useDispatch();
+	const { triggerExport, exportType } = useSelector((state) => state.export);
 
 	const CLASSROOM_WIDTH = 7.8;
 	const CLASSROOM_HEIGHT = 7.2;
-	let CANCHA_WIDTH = 28;
-	let CANCHA_HEIGHT = 15;
+	let CANCHA_WIDTH = 28; //28
+	let CANCHA_HEIGHT = 15; //15
 	const BANO_WIDTH = 4.2;
 	const BANO_HEIGHT = 7.2;
 	const ESCALERA_WIDTH = 3.2;
 	const ESCALERA_HEIGHT = 4.2;
 	const ENTRADA_WIDTH = 5;
-	const CIRCULACION_LATERAL = 5; //5
+	const CIRCULACION_LATERAL = 1; //5
 	const CIRCULACION_ENTRE_PABELLONES = 2; //10
 	const RETIRO_TERRENO = 1; // Metros de separación desde el borde
 
-	const SEPARACION_CANCHA = 5;
+	const SEPARACION_CANCHA = 1;
 
 	const {
 		vertices,
@@ -62,11 +66,20 @@ export default function TerrainPlanner({ school }) {
 		numberOfClassrooms,
 	} = school;
 
+	const tallerCreativo = layoutMode === "horizontal" ? 7.8 : 7.2;
+	const bibliotecaEscolar = layoutMode === "horizontal" ? 7.8 : 7.2;
+	const laboratorio = layoutMode === "horizontal" ? 7.8 : 7.2;
+	const salaReunionesLargo = layoutMode === "horizontal" ? 7.5 : 5.6;
+	const salaReunionesAncho = layoutMode === "horizontal" ? 5.6 : 7.5;
+	const salaMaestrosLargo = layoutMode === "horizontal" ? 7.5 : 10.7;
+	const salaMaestrosAncho = layoutMode === "horizontal" ? 10.7 : 7.5;
+	const direccionLargo = layoutMode === "horizontal" ? 7.5 : 6.1;
+	const direccionAncho = layoutMode === "horizontal" ? 6.1 : 7.5;
+
 	const dimensiones = {
 		"Biblioteca escolar": {
-			height: 7.2,
-			//ancho: 12.5,
-			width: 7.8,
+			height: 9, //12.5
+			width: bibliotecaEscolar,
 		},
 		"Sala de Psicomotricidad": {
 			height: 7.2,
@@ -86,7 +99,7 @@ export default function TerrainPlanner({ school }) {
 		},
 		"Taller creativo": {
 			height: 12,
-			width: 7.8,
+			width: tallerCreativo,
 		},
 		"Cocina escolar": {
 			height: 7.5,
@@ -109,21 +122,21 @@ export default function TerrainPlanner({ school }) {
 			width: 5,
 		},
 		"Dirección administrativa": {
-			height: 7.5,
-			width: 7.2,
+			height: direccionLargo,
+			width: direccionAncho,
 		},
 		"Sala de maestros": {
-			height: 7.5,
-			width: 7.2, // 10.7
+			height: salaMaestrosLargo,
+			width: salaMaestrosAncho, // 10.7
 		},
 		"Sala de reuniones": {
-			height: 7.5,
-			width: 7.2,
+			height: salaReunionesLargo,
+			width: salaReunionesAncho,
 		},
 		Laboratorio: {
 			height: 7.5,
 			//ancho: 12.5,
-			width: 7.8,
+			width: laboratorio,
 		},
 		Lactario: {
 			height: 7.5,
@@ -188,6 +201,14 @@ export default function TerrainPlanner({ school }) {
 			alert("Error al procesar las coordenadas. Verifica el formato.");
 		}
 	}, []);
+
+	useEffect(() => {
+		if (triggerExport && exportType === "json") {
+			exportToJSON();
+			// Resetear el estado después de exportar
+			dispatch(resetExport());
+		}
+	}, [triggerExport, exportType]);
 
 	// ✅ FUNCIONES DE ZOOM
 	const handleZoomIn = () => {
@@ -1367,1251 +1388,632 @@ export default function TerrainPlanner({ school }) {
 		);
 	};
 
-	const exportToDXF = (include3D = false) => {
-		if (!maxRectangle || !distribution) {
-			alert("Primero debes calcular la distribución del terreno");
-			return;
-		}
-
-		// ✅ NUEVO: Calcular offset para normalizar coordenadas
-		const easts = coordinates.map((c) => c.east);
-		const norths = coordinates.map((c) => c.north);
-		const offsetEast = Math.min(...easts);
-		const offsetNorth = Math.min(...norths);
-
-		console.log(`📍 Normalizando coordenadas:`);
-		console.log(`   Offset East: ${offsetEast.toFixed(2)}`);
-		console.log(`   Offset North: ${offsetNorth.toFixed(2)}`);
-
-		// ✅ Función auxiliar para normalizar coordenadas
-		const normalizeCoord = (coord) => ({
-			east: coord.east - offsetEast,
-			north: coord.north - offsetNorth,
-		});
-
-		// ✅ Normalizar corners del rectángulo
-		const normalizedRectangle = {
-			...maxRectangle,
-			corners: maxRectangle.corners.map(normalizeCoord),
-		};
-
-		// ✅ Función modificada que normaliza coordenadas
-		const obtenerElementosPiso = (numeroPiso) => {
-			if (!distribution.floors[numeroPiso]) {
-				return null;
-			}
-
-			let elementos = {
-				inicial: [],
-				primaria: [],
-				secundaria: [],
-				ambientes: [],
-				banos: [],
-				escaleras: [],
-				laterales: [],
-				entrada: null,
-				cancha: null,
-			};
-
-			const floorData = distribution.floors[numeroPiso];
-			const rectWidth = normalizedRectangle.width;
-			const rectHeight = normalizedRectangle.height;
-			const origin = normalizedRectangle.corners[0]; // ✅ Ya normalizado
-			const angle = (normalizedRectangle.angle * Math.PI) / 180;
-			const dirX = { east: Math.cos(angle), north: Math.sin(angle) };
-			const dirY = { east: -Math.sin(angle), north: Math.cos(angle) };
-
-			const createRoomCorners = (x, y, w, h) => {
-				const realCorners = [
-					{ east: x, north: y },
-					{ east: x + dirX.east * w, north: y + dirX.north * w },
-					{
-						east: x + dirX.east * w + dirY.east * h,
-						north: y + dirX.north * w + dirY.north * h,
-					},
-					{ east: x + dirY.east * h, north: y + dirY.north * h },
-				];
-
-				return {
-					realCorners: realCorners,
-				};
-			};
-
-			// [TODO EL CÓDIGO DE DISTRIBUCIÓN IGUAL QUE ANTES]
-			// ENTRADA
-			if (numeroPiso === 1 && floorData.ambientesSuperiores) {
-				const totalAmbientesWidth =
-					floorData.ambientesSuperiores.reduce(
-						(sum, amb) => sum + amb.ancho,
-						0
-					);
-				const startXAmbientes =
-					(rectWidth - totalAmbientesWidth - ENTRADA_WIDTH) / 2;
-
-				let currentXAmbiente = startXAmbientes;
-				const ambienteY = rectHeight - CLASSROOM_HEIGHT;
-				const xEnt =
-					origin.east +
-					dirX.east * currentXAmbiente +
-					dirY.east * ambienteY;
-				const yEnt =
-					origin.north +
-					dirX.north * currentXAmbiente +
-					dirY.north * ambienteY;
-
-				const entradaData = createRoomCorners(
-					xEnt,
-					yEnt,
-					ENTRADA_WIDTH,
-					CLASSROOM_HEIGHT
-				);
-				elementos.entrada = {
-					realCorners: entradaData.realCorners,
-				};
-				currentXAmbiente += ENTRADA_WIDTH;
-
-				floorData.ambientesSuperiores.forEach((ambiente) => {
-					const x =
-						origin.east +
-						dirX.east * currentXAmbiente +
-						dirY.east * (rectHeight - ambiente.alto);
-					const y =
-						origin.north +
-						dirX.north * currentXAmbiente +
-						dirY.north * (rectHeight - ambiente.alto);
-
-					const ambienteData = createRoomCorners(
-						x,
-						y,
-						ambiente.ancho,
-						ambiente.alto
-					);
-					elementos.ambientes.push({
-						nombre: ambiente.nombre,
-						tipo: "superior",
-						realCorners: ambienteData.realCorners,
-					});
-					currentXAmbiente += ambiente.ancho;
-				});
-			} else if (
-				numeroPiso === 2 &&
-				floorData.ambientesSuperiores &&
-				floorData.ambientesSuperiores.length > 0
-			) {
-				const totalAmbientesWidth =
-					floorData.ambientesSuperiores.reduce(
-						(sum, amb) => sum + amb.ancho,
-						0
-					);
-				const startXAmbientes = (rectWidth - totalAmbientesWidth) / 2;
-				let currentXAmbiente = startXAmbientes;
-
-				floorData.ambientesSuperiores.forEach((ambiente) => {
-					const x =
-						origin.east +
-						dirX.east * currentXAmbiente +
-						dirY.east * (rectHeight - ambiente.alto);
-					const y =
-						origin.north +
-						dirX.north * currentXAmbiente +
-						dirY.north * (rectHeight - ambiente.alto);
-
-					const ambienteData = createRoomCorners(
-						x,
-						y,
-						ambiente.ancho,
-						ambiente.alto
-					);
-					elementos.ambientes.push({
-						nombre: ambiente.nombre,
-						tipo: "superior",
-						realCorners: ambienteData.realCorners,
-					});
-					currentXAmbiente += ambiente.ancho;
-				});
-			}
-
-			// INICIAL
-			const pabellonInferiorColor =
-				distribution.pabellonInferiorEs === "primaria"
-					? "primaria"
-					: distribution.pabellonInferiorEs === "secundaria"
-					? "secundaria"
-					: "inicial";
-
-			let currentXInicial = CIRCULACION_LATERAL;
-
-			for (let i = 0; i < floorData.inicial; i++) {
-				if (i === floorData.inicialBanoPos && floorData.inicial > 0) {
-					const xBano = origin.east + dirX.east * currentXInicial;
-					const yBano = origin.north + dirX.north * currentXInicial;
-
-					const banoData = createRoomCorners(
-						xBano,
-						yBano,
-						BANO_WIDTH,
-						BANO_HEIGHT
-					);
-					elementos.banos.push({
-						nivel: "Inicial",
-						realCorners: banoData.realCorners,
-					});
-					currentXInicial += BANO_WIDTH;
-
-					const xEsc = origin.east + dirX.east * currentXInicial;
-					const yEsc = origin.north + dirX.north * currentXInicial;
-
-					const escaleraData = createRoomCorners(
-						xEsc,
-						yEsc,
-						ESCALERA_WIDTH,
-						ESCALERA_HEIGHT
-					);
-					elementos.escaleras.push({
-						nivel: "Inicial",
-						realCorners: escaleraData.realCorners,
-					});
-					currentXInicial += ESCALERA_WIDTH;
-				}
-
-				const x = origin.east + dirX.east * currentXInicial;
-				const y = origin.north + dirX.north * currentXInicial;
-
-				const aulaData = createRoomCorners(
-					x,
-					y,
-					CLASSROOM_WIDTH,
-					CLASSROOM_HEIGHT
-				);
-
-				if (pabellonInferiorColor === "inicial") {
-					elementos.inicial.push({
-						realCorners: aulaData.realCorners,
-					});
-				} else if (pabellonInferiorColor === "primaria") {
-					elementos.primaria.push({
-						realCorners: aulaData.realCorners,
-					});
-				} else if (pabellonInferiorColor === "secundaria") {
-					elementos.secundaria.push({
-						realCorners: aulaData.realCorners,
-					});
-				}
-
-				currentXInicial += CLASSROOM_WIDTH;
-			}
-
-			// PRIMARIA
-			const startYPrimaria =
-				CLASSROOM_HEIGHT + CIRCULACION_ENTRE_PABELLONES;
-			let currentYPrimaria = startYPrimaria;
-			const bibliotecaEnPrimaria =
-				distribution.ambientesEnPabellones.find(
-					(a) => a.pabellon === "primaria"
-				);
-
-			for (let i = 0; i < floorData.primaria; i++) {
-				if (i === floorData.primariaBanoPos && floorData.primaria > 0) {
-					const xBano = origin.east + dirY.east * currentYPrimaria;
-					const yBano = origin.north + dirY.north * currentYPrimaria;
-
-					const banoData = createRoomCorners(
-						xBano,
-						yBano,
-						CLASSROOM_WIDTH,
-						BANO_HEIGHT
-					);
-					elementos.banos.push({
-						nivel: "Primaria",
-						realCorners: banoData.realCorners,
-					});
-					currentYPrimaria += BANO_HEIGHT;
-
-					const xEsc = origin.east + dirY.east * currentYPrimaria;
-					const yEsc = origin.north + dirY.north * currentYPrimaria;
-
-					const escaleraData = createRoomCorners(
-						xEsc,
-						yEsc,
-						CLASSROOM_WIDTH,
-						ESCALERA_HEIGHT
-					);
-					elementos.escaleras.push({
-						nivel: "Primaria",
-						realCorners: escaleraData.realCorners,
-					});
-					currentYPrimaria += ESCALERA_HEIGHT;
-				}
-
-				const x = origin.east + dirY.east * currentYPrimaria;
-				const y = origin.north + dirY.north * currentYPrimaria;
-
-				const aulaData = createRoomCorners(
-					x,
-					y,
-					CLASSROOM_WIDTH,
-					CLASSROOM_HEIGHT
-				);
-				elementos.primaria.push({
-					realCorners: aulaData.realCorners,
-				});
-				currentYPrimaria += CLASSROOM_HEIGHT;
-			}
-
-			if (
-				bibliotecaEnPrimaria &&
-				numeroPiso === 1 &&
-				floorData.primaria > 0
-			) {
-				const x = origin.east + dirY.east * currentYPrimaria;
-				const y = origin.north + dirY.north * currentYPrimaria;
-
-				const bibliotecaData = createRoomCorners(
-					x,
-					y,
-					bibliotecaEnPrimaria.ancho,
-					bibliotecaEnPrimaria.alto
-				);
-				elementos.ambientes.push({
-					nombre: bibliotecaEnPrimaria.nombre,
-					tipo: "pabellon",
-					realCorners: bibliotecaData.realCorners,
-				});
-			}
-
-			// SECUNDARIA
-			let currentYSecundaria = startYPrimaria;
-			const laboratorioEnSecundaria =
-				distribution.ambientesEnPabellones.find(
-					(a) => a.pabellon === "secundaria"
-				);
-
-			for (let i = 0; i < floorData.secundaria; i++) {
-				if (
-					i === floorData.secundariaBanoPos &&
-					floorData.secundaria > 0
-				) {
-					const xBano =
-						origin.east +
-						dirX.east * (rectWidth - CLASSROOM_WIDTH) +
-						dirY.east * currentYSecundaria;
-					const yBano =
-						origin.north +
-						dirX.north * (rectWidth - CLASSROOM_WIDTH) +
-						dirY.north * currentYSecundaria;
-
-					const banoData = createRoomCorners(
-						xBano,
-						yBano,
-						CLASSROOM_WIDTH,
-						BANO_HEIGHT
-					);
-					elementos.banos.push({
-						nivel: "Secundaria",
-						realCorners: banoData.realCorners,
-					});
-					currentYSecundaria += BANO_HEIGHT;
-
-					const xEsc =
-						origin.east +
-						dirX.east * (rectWidth - CLASSROOM_WIDTH) +
-						dirY.east * currentYSecundaria;
-					const yEsc =
-						origin.north +
-						dirX.north * (rectWidth - CLASSROOM_WIDTH) +
-						dirY.north * currentYSecundaria;
-
-					const escaleraData = createRoomCorners(
-						xEsc,
-						yEsc,
-						CLASSROOM_WIDTH,
-						ESCALERA_HEIGHT
-					);
-					elementos.escaleras.push({
-						nivel: "Secundaria",
-						realCorners: escaleraData.realCorners,
-					});
-					currentYSecundaria += ESCALERA_HEIGHT;
-				}
-
-				const x =
-					origin.east +
-					dirX.east * (rectWidth - CLASSROOM_WIDTH) +
-					dirY.east * currentYSecundaria;
-				const y =
-					origin.north +
-					dirX.north * (rectWidth - CLASSROOM_WIDTH) +
-					dirY.north * currentYSecundaria;
-
-				const aulaData = createRoomCorners(
-					x,
-					y,
-					CLASSROOM_WIDTH,
-					CLASSROOM_HEIGHT
-				);
-				elementos.secundaria.push({
-					realCorners: aulaData.realCorners,
-				});
-				currentYSecundaria += CLASSROOM_HEIGHT;
-			}
-
-			if (
-				laboratorioEnSecundaria &&
-				numeroPiso === 1 &&
-				floorData.secundaria > 0
-			) {
-				const x =
-					origin.east +
-					dirX.east * (rectWidth - CLASSROOM_WIDTH) +
-					dirY.east * currentYSecundaria;
-				const y =
-					origin.north +
-					dirX.north * (rectWidth - CLASSROOM_WIDTH) +
-					dirY.north * currentYSecundaria;
-
-				const laboratorioData = createRoomCorners(
-					x,
-					y,
-					laboratorioEnSecundaria.ancho,
-					laboratorioEnSecundaria.alto
-				);
-				elementos.ambientes.push({
-					nombre: laboratorioEnSecundaria.nombre,
-					tipo: "pabellon",
-					realCorners: laboratorioData.realCorners,
-				});
-			}
-
-			// CANCHA Y LATERALES
-			if (numeroPiso === 1) {
-				const lateralesCancha =
-					distribution.ambientesLateralesCancha || [];
-
-				const totalWidthLaterales = lateralesCancha.reduce(
-					(sum, amb) => sum + amb.ancho,
-					0
-				);
-				const maxHeightLaterales =
-					lateralesCancha.length > 0
-						? Math.max(...lateralesCancha.map((amb) => amb.alto))
-						: 0;
-
-				const totalBloqueHeight =
-					CANCHA_HEIGHT +
-					(lateralesCancha.length > 0
-						? SEPARACION_CANCHA + maxHeightLaterales
-						: 0);
-
-				const startY = (rectHeight - totalBloqueHeight) / 2;
-
-				const canchaX = (rectWidth - CANCHA_WIDTH) / 2;
-				const canchaOrigin = {
-					east:
-						origin.east + dirX.east * canchaX + dirY.east * startY,
-					north:
-						origin.north +
-						dirX.north * canchaX +
-						dirY.north * startY,
-				};
-
-				const canchaData = createRoomCorners(
-					canchaOrigin.east,
-					canchaOrigin.north,
-					CANCHA_WIDTH,
-					CANCHA_HEIGHT
-				);
-				elementos.cancha = canchaData.realCorners;
-
-				if (lateralesCancha.length > 0) {
-					const lateralesX = (rectWidth - totalWidthLaterales) / 2;
-					const lateralesY =
-						startY + CANCHA_HEIGHT + SEPARACION_CANCHA;
-
-					let currentXLateral = lateralesX;
-					lateralesCancha.forEach((ambiente) => {
-						const x =
-							origin.east +
-							dirX.east * currentXLateral +
-							dirY.east * lateralesY;
-						const y =
-							origin.north +
-							dirX.north * currentXLateral +
-							dirY.north * lateralesY;
-
-						const lateralData = createRoomCorners(
-							x,
-							y,
-							ambiente.ancho,
-							ambiente.alto
-						);
-						elementos.laterales.push({
-							nombre: ambiente.nombre,
-							realCorners: lateralData.realCorners,
-						});
-						currentXLateral += ambiente.ancho;
-					});
-				}
-			}
-
-			return elementos;
-		};
-
-		// [RESTO DEL CÓDIGO IGUAL - recopilar pisos, generar DXF, etc.]
-		const todosPisos = [];
-
-		if (distribution.floors[1]) {
-			const elementos1 = obtenerElementosPiso(1);
-			console.log("✅ Piso 1 - Inicial:", elementos1.inicial?.length);
-			todosPisos.push({
-				piso: 1,
-				elementos: elementos1,
-				altura: 3.0,
-			});
-		}
-
-		if (distribution.floors[2] && distribution.totalFloors >= 2) {
-			const elementos2 = obtenerElementosPiso(2);
-			console.log("✅ Piso 2 - Inicial:", elementos2.inicial?.length);
-			todosPisos.push({
-				piso: 2,
-				elementos: elementos2,
-				altura: 3.0,
-			});
-		}
-
-		// Generar DXF
-		let dxfContent = generateDXFHeader();
-		const layers = {
-			Inicial: 1,
-			Primaria: 5,
-			Secundaria: 1,
-			Servicios: 6,
-			Circulación: 8,
-			Superior: 4,
-			Medio: 30,
-			Acceso: 8,
-		};
-		dxfContent += generateLayers(layers);
-		dxfContent += generateBlockDefinitions(include3D);
-
-		// [TODO EL CÓDIGO DE INSERCIÓN IGUAL]
-		todosPisos.forEach(({ piso, elementos, altura }) => {
-			const elevacion = (piso - 1) * altura;
-
-			let contadores = { inicial: 1, primaria: 1, secundaria: 1 };
-
-			// ✅ NUEVO: Función para insertar BLOQUE en lugar de geometría directa
-			const insertarBloque = (
-				realCorners,
-				nombreBloque,
-				nombreInstancia,
-				layer,
-				ancho,
-				largo
-			) => {
-				if (!realCorners || realCorners.length < 4) {
-					console.log(
-						`⚠️ Skipping ${nombreInstancia} - no realCorners`
-					);
-					return;
-				}
-
-				// Calcular centro para el texto
-				const centerX = (realCorners[0].east + realCorners[2].east) / 2;
-				const centerY =
-					(realCorners[0].north + realCorners[2].north) / 2;
-
-				// Calcular ángulo de rotación
-				const dx = realCorners[1].east - realCorners[0].east;
-				const dy = realCorners[1].north - realCorners[0].north;
-				const rotacion = (Math.atan2(dy, dx) * 180) / Math.PI;
-
-				// ✅ Insertar el BLOQUE
-				dxfContent += generateBlockInsert(
-					nombreBloque,
-					realCorners[0].east,
-					realCorners[0].north,
-					elevacion,
-					rotacion,
-					layer
-				);
-
-				// Agregar texto separado (no forma parte del bloque, para editarlo independiente)
-				dxfContent += generateText(
-					nombreInstancia,
-					centerX,
-					centerY,
-					elevacion + 0.5,
-					0.5,
-					layer
-				);
-
-				// Dimensiones como texto
-				const dimText = `${ancho.toFixed(1)}x${largo.toFixed(1)}m`;
-				dxfContent += generateText(
-					dimText,
-					centerX,
-					centerY - 0.8,
-					elevacion + 0.5,
-					0.3,
-					layer
-				);
-
-				console.log(
-					`   ✅ Insertado ${nombreBloque}: ${nombreInstancia}`
-				);
-			};
-
-			// Aulas Inicial
-			elementos.inicial?.forEach((aula) => {
-				insertarBloque(
-					aula.realCorners,
-					"AULA_INICIAL",
-					`Aula Inicial ${contadores.inicial++} - P${piso}`,
-					"Inicial",
-					CLASSROOM_WIDTH,
-					CLASSROOM_HEIGHT
-				);
-			});
-
-			// Aulas Primaria
-			elementos.primaria?.forEach((aula) => {
-				insertarBloque(
-					aula.realCorners,
-					"AULA_PRIMARIA",
-					`Aula Primaria ${contadores.primaria++} - P${piso}`,
-					"Primaria",
-					CLASSROOM_WIDTH,
-					CLASSROOM_HEIGHT
-				);
-			});
-
-			// Aulas Secundaria
-			elementos.secundaria?.forEach((aula) => {
-				insertarBloque(
-					aula.realCorners,
-					"AULA_SECUNDARIA",
-					`Aula Secundaria ${contadores.secundaria++} - P${piso}`,
-					"Secundaria",
-					CLASSROOM_WIDTH,
-					CLASSROOM_HEIGHT
-				);
-			});
-
-			// Baños
-			elementos.banos?.forEach((bano) => {
-				insertarBloque(
-					bano.realCorners,
-					"BANO",
-					`SSHH ${bano.nivel} - P${piso}`,
-					"Servicios",
-					BANO_WIDTH,
-					BANO_HEIGHT
-				);
-			});
-
-			// Escaleras
-			elementos.escaleras?.forEach((esc) => {
-				insertarBloque(
-					esc.realCorners,
-					"ESCALERA",
-					`Escalera ${esc.nivel} - P${piso}`,
-					"Circulación",
-					ESCALERA_WIDTH,
-					ESCALERA_HEIGHT
-				);
-			});
-
-			// Ambientes complementarios
-			elementos.ambientes?.forEach((amb) => {
-				const dim = dimensiones[amb.nombre];
-				if (dim) {
-					insertarBloque(
-						amb.realCorners,
-						"AMBIENTE_COMP",
-						`${amb.nombre} - P${piso}`,
-						"Superior",
-						dim.width,
-						dim.height
-					);
-				}
-			});
-
-			// Laterales
-			elementos.laterales?.forEach((lat) => {
-				const dim = dimensiones[lat.nombre];
-				if (dim) {
-					insertarBloque(
-						lat.realCorners,
-						"LATERAL",
-						`${lat.nombre} - P${piso}`,
-						"Medio",
-						dim.width,
-						dim.height
-					);
-				}
-			});
-
-			// Entrada (solo piso 1)
-			if (piso === 1 && elementos.entrada) {
-				insertarBloque(
-					elementos.entrada.realCorners,
-					"ENTRADA",
-					"Entrada Principal",
-					"Acceso",
-					ENTRADA_WIDTH,
-					CLASSROOM_HEIGHT
-				);
-			}
-
-			// Cancha (solo piso 1)
-			if (piso === 1 && elementos.cancha) {
-				insertarBloque(
-					elementos.cancha,
-					"CANCHA",
-					"Losa Deportiva",
-					"Medio",
-					CANCHA_WIDTH,
-					CANCHA_HEIGHT
-				);
-			}
-		});
-
-		// ✅ Terreno normalizado
-		if (coordinates.length >= 3) {
-			const terrainCorners = coordinates.map((c) => normalizeCoord(c));
-			dxfContent += generatePolyline(terrainCorners, "0", 0, true);
-			dxfContent += generateText(
-				"LÍMITE DEL TERRENO",
-				terrainCorners[0].east,
-				terrainCorners[0].north + 2,
-				0,
-				1.0,
-				"0"
-			);
-		}
-
-		dxfContent += generateDXFFooter();
-
-		// Descargar
-		const blob = new Blob([dxfContent], { type: "application/dxf" });
-		const url = URL.createObjectURL(blob);
-		const a = document.createElement("a");
-		a.href = url;
-		const tipo = include3D ? "3D" : "2D";
-		a.download = `distribucion_${
-			school.nombre || "colegio"
-		}_NORMALIZADO_${tipo}_${Date.now()}.dxf`;
-		a.click();
-		URL.revokeObjectURL(url);
-
-		console.log(`✅ DXF NORMALIZADO ${tipo} exportado`);
-		console.log(
-			`📍 Coordenadas trasladadas ${offsetEast.toFixed(
-				2
-			)} este, ${offsetNorth.toFixed(2)} norte al origen`
-		);
-	};
-
-	function generateDXFHeader() {
-		return `0
-SECTION
-2
-HEADER
-9
-$ACADVER
-1
-AC1015
-9
-$INSUNITS
-70
-6
-0
-ENDSEC
-0
-SECTION
-2
-TABLES
-0
-TABLE
-2
-LTYPE
-70
-1
-0
-LTYPE
-2
-CONTINUOUS
-70
-0
-3
-Solid line
-72
-65
-73
-0
-40
-0.0
-0
-ENDTAB
-`;
-	}
-
-	function generateLayers(layers) {
-		let layerSection = `0
-TABLE
-2
-LAYER
-70
-${Object.keys(layers).length}
-`;
-
-		for (const [name, color] of Object.entries(layers)) {
-			layerSection += `0
-LAYER
-2
-${name}
-70
-0
-62
-${color}
-6
-CONTINUOUS
-`;
-		}
-
-		layerSection += `0
-ENDTAB
-0
-ENDSEC
-`;
-
-		return layerSection;
-	}
-
-	// ✅ NUEVA FUNCIÓN: Definir todos los bloques
-	function generateBlockDefinitions(include3D) {
-		const alturaBloque = 3.0;
-
-		let blocks = `0
-SECTION
-2
-BLOCKS
-`;
-
-		const bloquesDef = [
-			{
-				nombre: "AULA_INICIAL",
-				ancho: CLASSROOM_WIDTH,
-				alto: CLASSROOM_HEIGHT,
-				color: 1,
-				layer: "Inicial",
-			},
-			{
-				nombre: "AULA_PRIMARIA",
-				ancho: CLASSROOM_WIDTH,
-				alto: CLASSROOM_HEIGHT,
-				color: 5,
-				layer: "Primaria",
-			},
-			{
-				nombre: "AULA_SECUNDARIA",
-				ancho: CLASSROOM_WIDTH,
-				alto: CLASSROOM_HEIGHT,
-				color: 1,
-				layer: "Secundaria",
-			},
-			{
-				nombre: "BANO",
-				ancho: BANO_WIDTH,
-				alto: BANO_HEIGHT,
-				color: 6,
-				layer: "Servicios",
-			},
-			{
-				nombre: "ESCALERA",
-				ancho: ESCALERA_WIDTH,
-				alto: ESCALERA_HEIGHT,
-				color: 8,
-				layer: "Circulación",
-			},
-			{
-				nombre: "AMBIENTE_COMP",
-				ancho: 7.8,
-				alto: 7.5,
-				color: 4,
-				layer: "Superior",
-			},
-			{
-				nombre: "LATERAL",
-				ancho: 5,
-				alto: 7.5,
-				color: 30,
-				layer: "Medio",
-			},
-			{
-				nombre: "ENTRADA",
-				ancho: ENTRADA_WIDTH,
-				alto: CLASSROOM_HEIGHT,
-				color: 8,
-				layer: "Acceso",
-			},
-			{
-				nombre: "CANCHA",
-				ancho: CANCHA_WIDTH,
-				alto: CANCHA_HEIGHT,
-				color: 3,
-				layer: "Medio",
-			},
-		];
-
-		console.log(
-			"🔨 Definiendo bloques:",
-			bloquesDef.map((b) => b.nombre).join(", ")
-		);
-
-		bloquesDef.forEach(({ nombre, ancho, alto, color, layer }) => {
-			blocks += `0
-BLOCK
-8
-0
-2
-${nombre}
-70
-0
-10
-0.0
-20
-0.0
-30
-0.0
-`;
-
-			if (include3D) {
-				// Piso
-				blocks += `0
-3DFACE
-8
-${layer}
-62
-${color}
-10
-0.000000
-20
-0.000000
-30
-0.000000
-11
-${ancho.toFixed(6)}
-21
-0.000000
-31
-0.000000
-12
-${ancho.toFixed(6)}
-22
-${alto.toFixed(6)}
-32
-0.000000
-13
-0.000000
-23
-${alto.toFixed(6)}
-33
-0.000000
-`;
-
-				// Techo
-				blocks += `0
-3DFACE
-8
-${layer}
-62
-${color}
-10
-0.000000
-20
-0.000000
-30
-${alturaBloque.toFixed(6)}
-11
-${ancho.toFixed(6)}
-21
-0.000000
-31
-${alturaBloque.toFixed(6)}
-12
-${ancho.toFixed(6)}
-22
-${alto.toFixed(6)}
-32
-${alturaBloque.toFixed(6)}
-13
-0.000000
-23
-${alto.toFixed(6)}
-33
-${alturaBloque.toFixed(6)}
-`;
-
-				// Pared 1
-				blocks += `0
-3DFACE
-8
-${layer}
-62
-${color}
-10
-0.000000
-20
-0.000000
-30
-0.000000
-11
-${ancho.toFixed(6)}
-21
-0.000000
-31
-0.000000
-12
-${ancho.toFixed(6)}
-22
-0.000000
-32
-${alturaBloque.toFixed(6)}
-13
-0.000000
-23
-0.000000
-33
-${alturaBloque.toFixed(6)}
-`;
-
-				// Pared 2
-				blocks += `0
-3DFACE
-8
-${layer}
-62
-${color}
-10
-${ancho.toFixed(6)}
-20
-0.000000
-30
-0.000000
-11
-${ancho.toFixed(6)}
-21
-${alto.toFixed(6)}
-31
-0.000000
-12
-${ancho.toFixed(6)}
-22
-${alto.toFixed(6)}
-32
-${alturaBloque.toFixed(6)}
-13
-${ancho.toFixed(6)}
-23
-0.000000
-33
-${alturaBloque.toFixed(6)}
-`;
-
-				// Pared 3
-				blocks += `0
-3DFACE
-8
-${layer}
-62
-${color}
-10
-${ancho.toFixed(6)}
-20
-${alto.toFixed(6)}
-30
-0.000000
-11
-0.000000
-21
-${alto.toFixed(6)}
-31
-0.000000
-12
-0.000000
-22
-${alto.toFixed(6)}
-32
-${alturaBloque.toFixed(6)}
-13
-${ancho.toFixed(6)}
-23
-${alto.toFixed(6)}
-33
-${alturaBloque.toFixed(6)}
-`;
-
-				// Pared 4
-				blocks += `0
-3DFACE
-8
-${layer}
-62
-${color}
-10
-0.000000
-20
-${alto.toFixed(6)}
-30
-0.000000
-11
-0.000000
-21
-0.000000
-31
-0.000000
-12
-0.000000
-22
-0.000000
-32
-${alturaBloque.toFixed(6)}
-13
-0.000000
-23
-${alto.toFixed(6)}
-33
-${alturaBloque.toFixed(6)}
-`;
-			} else {
-				// VERSIÓN 2D
-				blocks += `0
-LWPOLYLINE
-8
-${layer}
-62
-${color}
-90
-4
-70
-1
-10
-0.0
-20
-0.0
-10
-${ancho.toFixed(3)}
-20
-0.0
-10
-${ancho.toFixed(3)}
-20
-${alto.toFixed(3)}
-10
-0.0
-20
-${alto.toFixed(3)}
-`;
-			}
-
-			blocks += `0
-ENDBLK
-8
-0
-`;
-		});
-
-		blocks += `0
-ENDSEC
-0
-SECTION
-2
-ENTITIES
-`;
-
-		return blocks;
-	}
-
-	// ✅ NUEVA FUNCIÓN: Insertar instancia de bloque
-	function generateBlockInsert(blockName, x, y, z, rotation, layer) {
-		return `0
-INSERT
-8
-${typeof layer === "string" ? layer : "0"}
-2
-${blockName}
-10
-${x.toFixed(6)}
-20
-${y.toFixed(6)}
-30
-${z.toFixed(6)}
-50
-${rotation.toFixed(6)}
-`;
-	}
-
-	function generatePolyline(corners, layer, elevation = 0, isClosed = true) {
-		let polyline = `0
-LWPOLYLINE
-8
-${typeof layer === "string" ? layer : "0"}
-62
-${typeof layer === "number" ? layer : 7}
-90
-${corners.length}
-70
-${isClosed ? 1 : 0}
-38
-${elevation.toFixed(3)}
-`;
-
-		corners.forEach((corner) => {
-			polyline += `10
-${corner.east.toFixed(6)}
-20
-${corner.north.toFixed(6)}
-`;
-		});
-
-		return polyline;
-	}
-
-	function generateText(text, x, y, z, height, layer) {
-		return `0
-TEXT
-8
-${typeof layer === "string" ? layer : "0"}
-62
-${typeof layer === "number" ? layer : 7}
-10
-${x.toFixed(6)}
-20
-${y.toFixed(6)}
-30
-${z.toFixed(6)}
-40
-${height.toFixed(3)}
-1
-${text}
-72
-1
-73
-2
-`;
-	}
-
-	function generateDXFFooter() {
-		return `0
-ENDSEC
-0
-EOF
-`;
-	}
-
-	const classifyAmbientes = (ambientes) => {
+	// const classifyAmbientes = (ambientes) => {
+	// 	const enPabellones = [];
+	// 	const lateralesCancha = [];
+	// 	const superiores = [];
+
+	// 	ambientes.forEach((amb) => {
+	// 		const nombre = amb.nombre.toLowerCase();
+
+	// 		// ✅ AMBIENTES QUE VAN EN PABELLONES ESPECÍFICOS (únicos)
+	// 		if (nombre.includes("laboratorio")) {
+	// 			enPabellones.push({ ...amb, pabellon: "secundaria" });
+	// 		} else if (nombre.includes("biblioteca escolar")) {
+	// 			enPabellones.push({ ...amb, pabellon: "primaria" });
+	// 		} else if (
+	// 			nombre.includes("sala de psicomotricidad") ||
+	// 			nombre.includes("psicomotricidad")
+	// 		) {
+	// 			enPabellones.push({ ...amb, pabellon: "inicial" });
+	// 		}
+	// 		// ✅ AMBIENTES QUE SE DUPLICAN PARA PRIMARIA Y SECUNDARIA
+	// 		else if (nombre.includes("taller creativo")) {
+	// 			// Duplicar: uno para primaria y otro para secundaria
+	// 			enPabellones.push({
+	// 				...amb,
+	// 				pabellon: "primaria",
+	// 				nombre: amb.nombre + " (Primaria)",
+	// 			});
+	// 			enPabellones.push({
+	// 				...amb,
+	// 				pabellon: "secundaria",
+	// 				nombre: amb.nombre + " (Secundaria)",
+	// 			});
+	// 		} else if (
+	// 			nombre.includes("aula de innovación") ||
+	// 			nombre.includes("aula para ept") ||
+	// 			nombre.includes("innovación")
+	// 		) {
+	// 			// Duplicar: uno para primaria y otro para secundaria
+	// 			enPabellones.push({
+	// 				...amb,
+	// 				pabellon: "primaria",
+	// 				nombre: amb.nombre + " (Primaria)",
+	// 			});
+	// 			enPabellones.push({
+	// 				...amb,
+	// 				pabellon: "secundaria",
+	// 				nombre: amb.nombre + " (Secundaria)",
+	// 			});
+	// 		}
+	// 		// ✅ AMBIENTES QUE VAN EN LATERALES DE CANCHA
+	// 		else if (
+	// 			nombre.includes("cocina escolar") ||
+	// 			nombre.includes("comedor") ||
+	// 			nombre.includes("sala de usos múltiples") ||
+	// 			nombre.includes("sum") ||
+	// 			nombre.includes("topico") ||
+	// 			nombre.includes("lactario") ||
+	// 			nombre.includes("taller ept")
+	// 		) {
+	// 			lateralesCancha.push(amb);
+	// 		}
+	// 		// ✅ EL RESTO VA EN PABELLÓN SUPERIOR
+	// 		else {
+	// 			superiores.push(amb);
+	// 		}
+	// 	});
+
+	// 	// ✅ AJUSTAR DIMENSIONES SEGÚN MODO
+	// 	if (layoutMode === "vertical") {
+	// 		// En modo vertical, primaria y secundaria son HORIZONTALES → INVERTIR
+	// 		console.log("en pabellones :::", enPabellones);
+	// 		enPabellones.forEach((ambiente) => {
+	// 			if (
+	// 				ambiente.pabellon === "primaria" ||
+	// 				ambiente.pabellon === "secundaria"
+	// 			) {
+	// 				const anchoOriginal = ambiente.ancho;
+	// 				const altoOriginal = ambiente.alto;
+
+	// 				// Invertir dimensiones
+	// 				ambiente.ancho = altoOriginal;
+	// 				ambiente.alto = anchoOriginal;
+
+	// 				console.log(
+	// 					`🔄 ${ambiente.nombre}: ${anchoOriginal.toFixed(
+	// 						1
+	// 					)}x${altoOriginal.toFixed(
+	// 						1
+	// 					)} → ${ambiente.ancho.toFixed(
+	// 						1
+	// 					)}x${ambiente.alto.toFixed(1)}`
+	// 				);
+	// 			}
+
+	// 			// Inicial queda vertical → NO invertir
+	// 		});
+
+	// 		superiores.forEach((ambiente) => {
+	// 			const anchoOriginal = ambiente.ancho;
+	// 			const altoOriginal = ambiente.alto;
+
+	// 			// Invertir dimensiones
+	// 			ambiente.ancho = altoOriginal;
+	// 			ambiente.alto = anchoOriginal;
+
+	// 			console.log(
+	// 				`🔄 Superior: ${ambiente.nombre}: ${anchoOriginal.toFixed(
+	// 					1
+	// 				)}x${altoOriginal.toFixed(1)} → ${ambiente.ancho.toFixed(
+	// 					1
+	// 				)}x${ambiente.alto.toFixed(1)}`
+	// 			);
+	// 		});
+
+	// 		// Ambientes superiores ahora van a la derecha (vertical) → NO invertir
+	// 		// Laterales de cancha → NO invertir (se ajustan automáticamente)
+	// 	}
+
+	// 	return { enPabellones, lateralesCancha, superiores };
+	// };
+
+	// const distribuirEnCuadranteInterior = (cuadrante, lateralesCancha) => {
+	// 	const resultado = {
+	// 		cancha: null,
+	// 		ambientesTop: [],
+	// 		ambientesBottom: [],
+	// 		ambientesLeft: [],
+	// 		ambientesRight: [],
+	// 	};
+
+	// 	console.log("laterales cancha", lateralesCancha);
+
+	// 	if (lateralesCancha.length === 0) {
+	// 		return resultado;
+	// 	}
+
+	// 	// ✅ CANCHA SIEMPRE HORIZONTAL (28 ancho x 15 alto)
+	// 	const CANCHA_IDEAL_ANCHO = 28; // 24
+	// 	const CANCHA_IDEAL_ALTO = 15; // 16
+	// 	const CANCHA_MIN_WIDTH = 15; //15
+	// 	const CANCHA_MIN_HEIGHT = 8; //10
+	// 	const RATIO_CANCHA = CANCHA_IDEAL_ALTO / CANCHA_IDEAL_ANCHO; // 0.536
+	// 	const SEPARACION_CANCHA_REDUCIDA = 3.0;
+
+	// 	let mejorOrientacionCancha = null;
+
+	// 	// ✅ CALCULAR TAMAÑO AJUSTADO MANTENIENDO SIEMPRE HORIZONTAL
+	// 	let anchoDisponible = cuadrante.width * 0.95; // Usar más espacio
+	// 	let altoDisponible = cuadrante.height * 0.95;
+
+	// 	// Intentar desde el ancho (prioridad)
+	// 	let anchoAjustado = Math.min(CANCHA_IDEAL_ANCHO, anchoDisponible);
+	// 	let altoAjustado = anchoAjustado * RATIO_CANCHA;
+
+	// 	// Si el alto no cabe, ajustar proporcionalmente PERO mantener horizontal
+	// 	if (altoAjustado > altoDisponible) {
+	// 		altoAjustado = altoDisponible;
+	// 		anchoAjustado = altoAjustado / RATIO_CANCHA;
+	// 	}
+
+	// 	// ✅ VERIFICACIÓN CRÍTICA: Asegurar que SIEMPRE ancho > alto
+	// 	if (anchoAjustado < altoAjustado) {
+	// 		console.warn(
+	// 			"⚠️ Cancha se iba a voltear. Ajustando para mantener horizontal."
+	// 		);
+	// 		// Forzar horizontal usando el espacio disponible más pequeño
+	// 		if (anchoDisponible >= altoDisponible * (1 / RATIO_CANCHA)) {
+	// 			// Hay más espacio horizontal, ajustar desde el alto
+	// 			altoAjustado = Math.min(CANCHA_IDEAL_ALTO, altoDisponible);
+	// 			anchoAjustado = altoAjustado / RATIO_CANCHA;
+	// 		} else {
+	// 			// Hay más espacio vertical, ajustar desde el ancho
+	// 			anchoAjustado = Math.min(CANCHA_IDEAL_ANCHO, anchoDisponible);
+	// 			altoAjustado = anchoAjustado * RATIO_CANCHA;
+	// 		}
+	// 	}
+
+	// 	// ✅ VERIFICAR LÍMITES MÍNIMOS
+	// 	const cumpleMinimos =
+	// 		anchoAjustado >= CANCHA_MIN_WIDTH &&
+	// 		altoAjustado >= CANCHA_MIN_HEIGHT &&
+	// 		anchoAjustado > altoAjustado; // ✅ FORZAR horizontal
+
+	// 	if (cumpleMinimos) {
+	// 		mejorOrientacionCancha = {
+	// 			width: anchoAjustado,
+	// 			height: altoAjustado,
+	// 			rotada: false,
+	// 			x: cuadrante.x + (cuadrante.width - anchoAjustado) / 2,
+	// 			y: cuadrante.y + (cuadrante.height - altoAjustado) / 2,
+	// 		};
+
+	// 		console.log("✅ Cancha HORIZONTAL:", {
+	// 			cuadrante: `${cuadrante.width.toFixed(
+	// 				1
+	// 			)} x ${cuadrante.height.toFixed(1)}`,
+	// 			cancha: `${anchoAjustado.toFixed(1)} x ${altoAjustado.toFixed(
+	// 				1
+	// 			)}`,
+	// 			esHorizontal: anchoAjustado > altoAjustado,
+	// 			ratio: (altoAjustado / anchoAjustado).toFixed(3),
+	// 		});
+	// 	} else {
+	// 		console.warn("❌ Cancha NO CABE o no cumple horizontal:", {
+	// 			cuadrante: `${cuadrante.width.toFixed(
+	// 				1
+	// 			)} x ${cuadrante.height.toFixed(1)}`,
+	// 			intentoCancha: `${anchoAjustado.toFixed(
+	// 				1
+	// 			)} x ${altoAjustado.toFixed(1)}`,
+	// 			cumpleMinimos: `ancho >= ${CANCHA_MIN_WIDTH}: ${
+	// 				anchoAjustado >= CANCHA_MIN_WIDTH
+	// 			}, alto >= ${CANCHA_MIN_HEIGHT}: ${
+	// 				altoAjustado >= CANCHA_MIN_HEIGHT
+	// 			}, horizontal: ${anchoAjustado > altoAjustado}`,
+	// 		});
+	// 	}
+
+	// 	resultado.cancha = mejorOrientacionCancha;
+
+	// 	// ✅ CALCULAR ESPACIOS DISPONIBLES
+	// 	const espaciosDisponibles = mejorOrientacionCancha
+	// 		? {
+	// 				top: {
+	// 					x: cuadrante.x,
+	// 					y: cuadrante.y,
+	// 					width: cuadrante.width,
+	// 					height:
+	// 						mejorOrientacionCancha.y -
+	// 						cuadrante.y -
+	// 						SEPARACION_CANCHA_REDUCIDA,
+	// 					ocupado: 0,
+	// 				},
+	// 				bottom: {
+	// 					x: cuadrante.x,
+	// 					y:
+	// 						mejorOrientacionCancha.y +
+	// 						mejorOrientacionCancha.height +
+	// 						SEPARACION_CANCHA_REDUCIDA,
+	// 					width: cuadrante.width,
+	// 					height:
+	// 						cuadrante.y +
+	// 						cuadrante.height -
+	// 						(mejorOrientacionCancha.y +
+	// 							mejorOrientacionCancha.height) -
+	// 						SEPARACION_CANCHA_REDUCIDA,
+	// 					ocupado: 0,
+	// 				},
+	// 				left: {
+	// 					x: cuadrante.x,
+	// 					y: mejorOrientacionCancha.y,
+	// 					width:
+	// 						mejorOrientacionCancha.x -
+	// 						cuadrante.x -
+	// 						SEPARACION_CANCHA_REDUCIDA,
+	// 					height: mejorOrientacionCancha.height,
+	// 					ocupado: 0,
+	// 				},
+	// 				right: {
+	// 					x:
+	// 						mejorOrientacionCancha.x +
+	// 						mejorOrientacionCancha.width +
+	// 						SEPARACION_CANCHA_REDUCIDA,
+	// 					y: mejorOrientacionCancha.y,
+	// 					width:
+	// 						cuadrante.x +
+	// 						cuadrante.width -
+	// 						(mejorOrientacionCancha.x +
+	// 							mejorOrientacionCancha.width) -
+	// 						SEPARACION_CANCHA_REDUCIDA,
+	// 					height: mejorOrientacionCancha.height,
+	// 					ocupado: 0,
+	// 				},
+	// 		  }
+	// 		: {
+	// 				bottom: {
+	// 					x: cuadrante.x,
+	// 					y: cuadrante.y,
+	// 					width: cuadrante.width,
+	// 					height: cuadrante.height,
+	// 					ocupado: 0,
+	// 				},
+	// 				top: { x: 0, y: 0, width: 0, height: 0, ocupado: 0 },
+	// 				left: { x: 0, y: 0, width: 0, height: 0, ocupado: 0 },
+	// 				right: { x: 0, y: 0, width: 0, height: 0, ocupado: 0 },
+	// 		  };
+
+	// 	// ✅ DISTRIBUIR AMBIENTES
+	// 	// ✅ PASO 1: AGRUPAR COCINA Y COMEDOR
+	// 	const ambientesAgrupados = [];
+	// 	const cocina = lateralesCancha.find((a) =>
+	// 		a.nombre.toLowerCase().includes("cocina")
+	// 	);
+	// 	const comedor = lateralesCancha.find((a) =>
+	// 		a.nombre.toLowerCase().includes("comedor")
+	// 	);
+
+	// 	// Si hay cocina Y comedor, agruparlos
+	// 	if (cocina && comedor) {
+	// 		ambientesAgrupados.push({
+	// 			tipo: "grupo_cocina_comedor",
+	// 			ambientes: [cocina, comedor],
+	// 			// El ancho total es la suma (van uno al lado del otro)
+	// 			ancho: cocina.ancho + comedor.ancho,
+	// 			alto: Math.max(cocina.alto, comedor.alto),
+	// 			nombre: "Cocina + Comedor",
+	// 		});
+
+	// 		// Agregar el resto de ambientes (excepto cocina y comedor)
+	// 		lateralesCancha.forEach((ambiente) => {
+	// 			if (ambiente !== cocina && ambiente !== comedor) {
+	// 				ambientesAgrupados.push({
+	// 					tipo: "individual",
+	// 					ambientes: [ambiente],
+	// 					ancho: ambiente.ancho,
+	// 					alto: ambiente.alto,
+	// 					nombre: ambiente.nombre,
+	// 				});
+	// 			}
+	// 		});
+	// 	} else {
+	// 		// Si no hay grupo, todos son individuales
+	// 		lateralesCancha.forEach((ambiente) => {
+	// 			ambientesAgrupados.push({
+	// 				tipo: "individual",
+	// 				ambientes: [ambiente],
+	// 				ancho: ambiente.ancho,
+	// 				alto: ambiente.alto,
+	// 				nombre: ambiente.nombre,
+	// 			});
+	// 		});
+	// 	}
+
+	// 	// Ordenar por área (más grandes primero)
+	// 	ambientesAgrupados.sort((a, b) => b.ancho * b.alto - a.ancho * a.alto);
+
+	// 	// ✅ PASO 2: DISTRIBUIR POR LADO Y CALCULAR POSICIONES
+	// 	const ambientesPorLado = {
+	// 		bottom: [],
+	// 		top: [],
+	// 		left: [],
+	// 		right: [],
+	// 	};
+
+	// 	ambientesAgrupados.forEach((grupo) => {
+	// 		let mejorLado = null;
+	// 		let mejorPuntuacion = -1;
+
+	// 		["bottom", "top", "left", "right"].forEach((nombreLado) => {
+	// 			const espacio = espaciosDisponibles[nombreLado];
+	// 			let cabe = false;
+	// 			let puntuacion = 0;
+
+	// 			if (nombreLado === "bottom" || nombreLado === "top") {
+	// 				// Lados horizontales
+	// 				const espacioRestante = espacio.width - espacio.ocupado;
+	// 				cabe =
+	// 					grupo.ancho <= espacioRestante &&
+	// 					grupo.alto <= espacio.height;
+
+	// 				if (cabe) {
+	// 					puntuacion = espacioRestante - grupo.ancho;
+	// 					// Preferencia: bottom > top
+	// 					if (nombreLado === "bottom") puntuacion += 100;
+	// 					if (nombreLado === "top") puntuacion += 80;
+	// 				}
+	// 			} else {
+	// 				// Lados verticales
+	// 				const espacioRestante = espacio.height - espacio.ocupado;
+	// 				cabe =
+	// 					grupo.ancho <= espacio.width &&
+	// 					grupo.alto <= espacioRestante;
+
+	// 				if (cabe) {
+	// 					puntuacion = espacioRestante - grupo.alto;
+	// 					// Preferencia: left > right (para cocina/comedor cerca de entrada)
+	// 					if (nombreLado === "left") puntuacion += 90;
+	// 					if (nombreLado === "right") puntuacion += 60;
+	// 				}
+	// 			}
+
+	// 			if (cabe && puntuacion > mejorPuntuacion) {
+	// 				mejorPuntuacion = puntuacion;
+	// 				mejorLado = nombreLado;
+	// 			}
+	// 		});
+
+	// 		if (mejorLado) {
+	// 			const espacio = espaciosDisponibles[mejorLado];
+	// 			ambientesPorLado[mejorLado].push(grupo);
+
+	// 			// Marcar espacio ocupado
+	// 			if (mejorLado === "bottom" || mejorLado === "top") {
+	// 				espacio.ocupado += grupo.ancho;
+	// 			} else {
+	// 				espacio.ocupado += grupo.alto;
+	// 			}
+	// 		} else {
+	// 			console.warn("⚠️ Grupo sin espacio:", grupo.nombre);
+	// 		}
+	// 	});
+
+	// 	// ✅ PASO 3: CALCULAR POSICIONES CENTRADAS Y PEGADAS A LA CANCHA
+
+	// 	Object.keys(ambientesPorLado).forEach((nombreLado) => {
+	// 		const grupos = ambientesPorLado[nombreLado];
+	// 		if (grupos.length === 0) return;
+
+	// 		const espacio = espaciosDisponibles[nombreLado];
+
+	// 		if (nombreLado === "bottom" || nombreLado === "top") {
+	// 			// ===================================
+	// 			// HORIZONTAL
+	// 			// ===================================
+	// 			const anchoTotal = grupos.reduce((sum, g) => sum + g.ancho, 0);
+
+	// 			let posicionInicialX, posicionY;
+
+	// 			if (mejorOrientacionCancha) {
+	// 				// ✅ CON CANCHA: Centrar alrededor de la cancha
+	// 				posicionInicialX =
+	// 					mejorOrientacionCancha.x +
+	// 					(mejorOrientacionCancha.width - anchoTotal) / 2;
+
+	// 				if (nombreLado === "bottom") {
+	// 					posicionY =
+	// 						mejorOrientacionCancha.y +
+	// 						mejorOrientacionCancha.height +
+	// 						SEPARACION_CANCHA_REDUCIDA;
+	// 				} else {
+	// 					const altoMaximo = Math.max(
+	// 						...grupos.map((g) => g.alto)
+	// 					);
+	// 					posicionY =
+	// 						mejorOrientacionCancha.y -
+	// 						SEPARACION_CANCHA_REDUCIDA -
+	// 						altoMaximo;
+	// 				}
+	// 			} else {
+	// 				// ✅ SIN CANCHA: Centrar en el cuadrante completo
+	// 				posicionInicialX =
+	// 					espacio.x + (espacio.width - anchoTotal) / 2;
+
+	// 				if (nombreLado === "bottom") {
+	// 					posicionY = espacio.y;
+	// 				} else {
+	// 					const altoMaximo = Math.max(
+	// 						...grupos.map((g) => g.alto)
+	// 					);
+	// 					posicionY = espacio.y + espacio.height - altoMaximo;
+	// 				}
+	// 			}
+
+	// 			// Colocar grupos
+	// 			grupos.forEach((grupo) => {
+	// 				const AJUSTE_PEGADO = 0.1;
+
+	// 				if (grupo.tipo === "grupo_cocina_comedor") {
+	// 					const [cocina, comedor] = grupo.ambientes;
+
+	// 					if (nombreLado === "bottom") {
+	// 						resultado.ambientesBottom.push({
+	// 							...cocina,
+	// 							x: posicionInicialX,
+	// 							y: posicionY,
+	// 						});
+
+	// 						resultado.ambientesBottom.push({
+	// 							...comedor,
+	// 							x:
+	// 								posicionInicialX +
+	// 								cocina.ancho -
+	// 								AJUSTE_PEGADO,
+	// 							y: posicionY,
+	// 						});
+	// 					} else {
+	// 						resultado.ambientesTop.push({
+	// 							...cocina,
+	// 							x: posicionInicialX,
+	// 							y: posicionY,
+	// 						});
+
+	// 						resultado.ambientesTop.push({
+	// 							...comedor,
+	// 							x:
+	// 								posicionInicialX +
+	// 								cocina.ancho -
+	// 								AJUSTE_PEGADO,
+	// 							y: posicionY,
+	// 						});
+	// 					}
+	// 				} else {
+	// 					const ambiente = grupo.ambientes[0];
+
+	// 					if (nombreLado === "bottom") {
+	// 						resultado.ambientesBottom.push({
+	// 							...ambiente,
+	// 							x: posicionInicialX,
+	// 							y: posicionY,
+	// 						});
+	// 					} else {
+	// 						resultado.ambientesTop.push({
+	// 							...ambiente,
+	// 							x: posicionInicialX,
+	// 							y: posicionY,
+	// 						});
+	// 					}
+	// 				}
+
+	// 				posicionInicialX += grupo.ancho;
+	// 			});
+	// 		} else {
+	// 			// ===================================
+	// 			// VERTICAL
+	// 			// ===================================
+	// 			const altoTotal = grupos.reduce((sum, g) => sum + g.alto, 0);
+
+	// 			let posicionInicialY, posicionX;
+
+	// 			if (mejorOrientacionCancha) {
+	// 				// ✅ CON CANCHA: Centrar alrededor de la cancha
+	// 				posicionInicialY =
+	// 					mejorOrientacionCancha.y +
+	// 					(mejorOrientacionCancha.height - altoTotal) / 2;
+
+	// 				if (nombreLado === "left") {
+	// 					const anchoMaximo = Math.max(
+	// 						...grupos.map((g) => g.ancho)
+	// 					);
+	// 					posicionX =
+	// 						mejorOrientacionCancha.x -
+	// 						SEPARACION_CANCHA_REDUCIDA -
+	// 						anchoMaximo;
+	// 				} else {
+	// 					posicionX =
+	// 						mejorOrientacionCancha.x +
+	// 						mejorOrientacionCancha.width +
+	// 						SEPARACION_CANCHA_REDUCIDA;
+	// 				}
+	// 			} else {
+	// 				// ✅ SIN CANCHA: Centrar en el cuadrante completo
+	// 				posicionInicialY =
+	// 					espacio.y + (espacio.height - altoTotal) / 2;
+
+	// 				if (nombreLado === "left") {
+	// 					const anchoMaximo = Math.max(
+	// 						...grupos.map((g) => g.ancho)
+	// 					);
+	// 					posicionX = espacio.x + espacio.width - anchoMaximo;
+	// 				} else {
+	// 					posicionX = espacio.x;
+	// 				}
+	// 			}
+
+	// 			// Colocar grupos
+	// 			grupos.forEach((grupo) => {
+	// 				const AJUSTE_PEGADO = 0.1;
+
+	// 				if (grupo.tipo === "grupo_cocina_comedor") {
+	// 					const [cocina, comedor] = grupo.ambientes;
+
+	// 					if (nombreLado === "left") {
+	// 						resultado.ambientesLeft.push({
+	// 							...cocina,
+	// 							x: posicionX,
+	// 							y: posicionInicialY,
+	// 						});
+
+	// 						resultado.ambientesLeft.push({
+	// 							...comedor,
+	// 							x: posicionX,
+	// 							y:
+	// 								posicionInicialY +
+	// 								cocina.alto -
+	// 								AJUSTE_PEGADO,
+	// 						});
+	// 					} else {
+	// 						resultado.ambientesRight.push({
+	// 							...cocina,
+	// 							x: posicionX,
+	// 							y: posicionInicialY,
+	// 						});
+
+	// 						resultado.ambientesRight.push({
+	// 							...comedor,
+	// 							x: posicionX,
+	// 							y:
+	// 								posicionInicialY +
+	// 								cocina.alto -
+	// 								AJUSTE_PEGADO,
+	// 						});
+	// 					}
+	// 				} else {
+	// 					const ambiente = grupo.ambientes[0];
+
+	// 					if (nombreLado === "left") {
+	// 						resultado.ambientesLeft.push({
+	// 							...ambiente,
+	// 							x: posicionX,
+	// 							y: posicionInicialY,
+	// 						});
+	// 					} else {
+	// 						resultado.ambientesRight.push({
+	// 							...ambiente,
+	// 							x: posicionX,
+	// 							y: posicionInicialY,
+	// 						});
+	// 					}
+	// 				}
+
+	// 				posicionInicialY += grupo.alto;
+	// 			});
+	// 		}
+	// 	});
+
+	// 	console.log("📐 Distribución de ambientes:", {
+	// 		bottom: ambientesPorLado.bottom.map((g) => g.nombre),
+	// 		top: ambientesPorLado.top.map((g) => g.nombre),
+	// 		left: ambientesPorLado.left.map((g) => g.nombre),
+	// 		right: ambientesPorLado.right.map((g) => g.nombre),
+	// 	});
+
+	// 	return resultado;
+	// };
+
+	const classifyAmbientes = (ambientes, hayPrimaria, haySecundaria) => {
 		const enPabellones = [];
 		const lateralesCancha = [];
 		const superiores = [];
@@ -2630,35 +2032,63 @@ EOF
 			) {
 				enPabellones.push({ ...amb, pabellon: "inicial" });
 			}
-			// ✅ AMBIENTES QUE SE DUPLICAN PARA PRIMARIA Y SECUNDARIA
+			// ✅ AMBIENTES QUE SE DUPLICAN SOLO SI EXISTEN AMBOS NIVELES
 			else if (nombre.includes("taller creativo")) {
-				// Duplicar: uno para primaria y otro para secundaria
-				enPabellones.push({
-					...amb,
-					pabellon: "primaria",
-					nombre: amb.nombre + " (Primaria)",
-				});
-				enPabellones.push({
-					...amb,
-					pabellon: "secundaria",
-					nombre: amb.nombre + " (Secundaria)",
-				});
+				if (hayPrimaria && haySecundaria) {
+					// ✅ DUPLICAR: uno para primaria y otro para secundaria
+					enPabellones.push({
+						...amb,
+						pabellon: "primaria",
+						nombre: amb.nombre + " (Primaria)",
+					});
+					enPabellones.push({
+						...amb,
+						pabellon: "secundaria",
+						nombre: amb.nombre + " (Secundaria)",
+					});
+				} else if (hayPrimaria) {
+					// ✅ SOLO UNO: para primaria
+					enPabellones.push({
+						...amb,
+						pabellon: "primaria",
+					});
+				} else if (haySecundaria) {
+					// ✅ SOLO UNO: para secundaria
+					enPabellones.push({
+						...amb,
+						pabellon: "secundaria",
+					});
+				}
 			} else if (
 				nombre.includes("aula de innovación") ||
 				nombre.includes("aula para ept") ||
 				nombre.includes("innovación")
 			) {
-				// Duplicar: uno para primaria y otro para secundaria
-				enPabellones.push({
-					...amb,
-					pabellon: "primaria",
-					nombre: amb.nombre + " (Primaria)",
-				});
-				enPabellones.push({
-					...amb,
-					pabellon: "secundaria",
-					nombre: amb.nombre + " (Secundaria)",
-				});
+				if (hayPrimaria && haySecundaria) {
+					// ✅ DUPLICAR: uno para primaria y otro para secundaria
+					enPabellones.push({
+						...amb,
+						pabellon: "primaria",
+						nombre: amb.nombre + " (Primaria)",
+					});
+					enPabellones.push({
+						...amb,
+						pabellon: "secundaria",
+						nombre: amb.nombre + " (Secundaria)",
+					});
+				} else if (hayPrimaria) {
+					// ✅ SOLO UNO: para primaria
+					enPabellones.push({
+						...amb,
+						pabellon: "primaria",
+					});
+				} else if (haySecundaria) {
+					// ✅ SOLO UNO: para secundaria
+					enPabellones.push({
+						...amb,
+						pabellon: "secundaria",
+					});
+				}
 			}
 			// ✅ AMBIENTES QUE VAN EN LATERALES DE CANCHA
 			else if (
@@ -2681,7 +2111,6 @@ EOF
 		// ✅ AJUSTAR DIMENSIONES SEGÚN MODO
 		if (layoutMode === "vertical") {
 			// En modo vertical, primaria y secundaria son HORIZONTALES → INVERTIR
-			console.log("en pabellones :::", enPabellones);
 			enPabellones.forEach((ambiente) => {
 				if (
 					ambiente.pabellon === "primaria" ||
@@ -2732,128 +2161,6 @@ EOF
 		return { enPabellones, lateralesCancha, superiores };
 	};
 
-	// const classifyAmbientes = (ambientes) => {
-	// 	const enPabellones = [];
-	// 	const lateralesCancha = [];
-	// 	const superiores = [];
-
-	// 	ambientes.forEach((amb) => {
-	// 		const nombre = amb.nombre.toLowerCase();
-
-	// 		// ✅ AMBIENTES QUE VAN EN PABELLONES ESPECÍFICOS (únicos)
-	// 		if (nombre.includes("laboratorio")) {
-	// 			enPabellones.push({
-	// 				...amb,
-	// 				pabellon: "secundaria",
-	// 				ancho: amb.width,  // ✅ Inicializar ancho/alto
-	// 				alto: amb.height
-	// 			});
-	// 		} else if (nombre.includes("biblioteca escolar")) {
-	// 			enPabellones.push({
-	// 				...amb,
-	// 				pabellon: "primaria",
-	// 				ancho: amb.width,  // ✅ Inicializar ancho/alto
-	// 				alto: amb.height
-	// 			});
-	// 		} else if (
-	// 			nombre.includes("sala de psicomotricidad") ||
-	// 			nombre.includes("psicomotricidad")
-	// 		) {
-	// 			enPabellones.push({
-	// 				...amb,
-	// 				pabellon: "inicial",
-	// 				ancho: amb.width,  // ✅ Inicializar ancho/alto
-	// 				alto: amb.height
-	// 			});
-	// 		}
-	// 		// ✅ AMBIENTES QUE SE DUPLICAN PARA PRIMARIA Y SECUNDARIA
-	// 		else if (nombre.includes("taller creativo")) {
-	// 			enPabellones.push({
-	// 				...amb,
-	// 				pabellon: "primaria",
-	// 				nombre: amb.nombre + " (Primaria)",
-	// 				ancho: amb.width,  // ✅ Inicializar ancho/alto
-	// 				alto: amb.height
-	// 			});
-	// 			enPabellones.push({
-	// 				...amb,
-	// 				pabellon: "secundaria",
-	// 				nombre: amb.nombre + " (Secundaria)",
-	// 				ancho: amb.width,  // ✅ Inicializar ancho/alto
-	// 				alto: amb.height
-	// 			});
-	// 		} else if (
-	// 			nombre.includes("aula de innovación") ||
-	// 			nombre.includes("aula para ept") ||
-	// 			nombre.includes("innovación")
-	// 		) {
-	// 			enPabellones.push({
-	// 				...amb,
-	// 				pabellon: "primaria",
-	// 				nombre: amb.nombre + " (Primaria)",
-	// 				ancho: amb.width,  // ✅ Inicializar ancho/alto
-	// 				alto: amb.height
-	// 			});
-	// 			enPabellones.push({
-	// 				...amb,
-	// 				pabellon: "secundaria",
-	// 				nombre: amb.nombre + " (Secundaria)",
-	// 				ancho: amb.width,  // ✅ Inicializar ancho/alto
-	// 				alto: amb.height
-	// 			});
-	// 		}
-	// 		// ✅ AMBIENTES QUE VAN EN LATERALES DE CANCHA
-	// 		else if (
-	// 			nombre.includes("cocina escolar") ||
-	// 			nombre.includes("comedor") ||
-	// 			nombre.includes("sala de usos múltiples") ||
-	// 			nombre.includes("sum") ||
-	// 			nombre.includes("topico") ||
-	// 			nombre.includes("lactario") ||
-	// 			nombre.includes("taller ept")
-	// 		) {
-	// 			lateralesCancha.push({
-	// 				...amb,
-	// 				ancho: amb.width,  // ✅ Inicializar ancho/alto
-	// 				alto: amb.height
-	// 			});
-	// 		}
-	// 		// ✅ EL RESTO VA EN PABELLÓN SUPERIOR
-	// 		else {
-	// 			superiores.push({
-	// 				...amb,
-	// 				ancho: amb.width,  // ✅ Inicializar ancho/alto
-	// 				alto: amb.height
-	// 			});
-	// 		}
-	// 	});
-
-	// 	// ✅ AHORA SÍ INVERTIR (porque ancho/alto ya existen)
-	// 	if (layoutMode === "vertical") {
-	// 		// Invertir primaria y secundaria
-	// 		enPabellones.forEach((ambiente) => {
-	// 			if (ambiente.pabellon === "primaria" || ambiente.pabellon === "secundaria") {
-	// 				const temp = ambiente.ancho;
-	// 				ambiente.ancho = ambiente.alto;
-	// 				ambiente.alto = temp;
-
-	// 				//console.log(`🔄 Pabellón: ${ambiente.nombre}: ${temp.toFixed(1)}x${ambiente.alto.toFixed(1)} → ${ambiente.ancho.toFixed(1)}x${ambiente.alto.toFixed(1)}`);
-	// 			}
-	// 		});
-
-	// 		// Invertir ambientes superiores
-	// 		superiores.forEach((ambiente) => {
-	// 			const temp = ambiente.ancho;
-	// 			ambiente.ancho = ambiente.alto;
-	// 			ambiente.alto = temp;
-
-	// 			console.log(`🔄 Superior: ${ambiente.nombre}: ${temp.toFixed(1)}x${ambiente.alto.toFixed(1)} → ${ambiente.ancho.toFixed(1)}x${ambiente.alto.toFixed(1)}`);
-	// 		});
-	// 	}
-
-	// 	return { enPabellones, lateralesCancha, superiores };
-	// };
-
 	const distribuirEnCuadranteInterior = (cuadrante, lateralesCancha) => {
 		const resultado = {
 			cancha: null,
@@ -2863,163 +2170,142 @@ EOF
 			ambientesRight: [],
 		};
 
-		if (lateralesCancha.length === 0) {
-			return resultado;
-		}
-
-		// ✅ CANCHA SIEMPRE HORIZONTAL (28 ancho x 15 alto)
-		const CANCHA_IDEAL_ANCHO = 28;
-		const CANCHA_IDEAL_ALTO = 15;
-		const CANCHA_MIN_WIDTH = 15;
-		const CANCHA_MIN_HEIGHT = 10;
-		const RATIO_CANCHA = CANCHA_IDEAL_ALTO / CANCHA_IDEAL_ANCHO; // 0.536
-		const SEPARACION_CANCHA_REDUCIDA = 3.0;
+		// ✅ CANCHA SIEMPRE 28x15 (PRIORIDAD ABSOLUTA)
+		const CANCHA_ANCHO = 28;
+		const CANCHA_ALTO = 15;
+		const SEPARACION_CANCHA = 3.0;
 
 		let mejorOrientacionCancha = null;
+		let canchaRotada = false;
 
-		// ✅ CALCULAR TAMAÑO AJUSTADO MANTENIENDO SIEMPRE HORIZONTAL
-		let anchoDisponible = cuadrante.width * 0.65; // Usar más espacio
-		let altoDisponible = cuadrante.height * 0.65;
+		// ✅ INTENTAR ORIENTACIÓN NORMAL (28 ancho x 15 alto)
+		const cabeNormal =
+			cuadrante.width >= CANCHA_ANCHO && cuadrante.height >= CANCHA_ALTO;
 
-		// Intentar desde el ancho (prioridad)
-		let anchoAjustado = Math.min(CANCHA_IDEAL_ANCHO, anchoDisponible);
-		let altoAjustado = anchoAjustado * RATIO_CANCHA;
+		// ✅ INTENTAR ORIENTACIÓN ROTADA (15 ancho x 28 alto)
+		const cabeRotada =
+			cuadrante.width >= CANCHA_ALTO && cuadrante.height >= CANCHA_ANCHO;
 
-		// Si el alto no cabe, ajustar proporcionalmente PERO mantener horizontal
-		if (altoAjustado > altoDisponible) {
-			altoAjustado = altoDisponible;
-			anchoAjustado = altoAjustado / RATIO_CANCHA;
-		}
-
-		// ✅ VERIFICACIÓN CRÍTICA: Asegurar que SIEMPRE ancho > alto
-		if (anchoAjustado < altoAjustado) {
-			console.warn(
-				"⚠️ Cancha se iba a voltear. Ajustando para mantener horizontal."
-			);
-			// Forzar horizontal usando el espacio disponible más pequeño
-			if (anchoDisponible >= altoDisponible * (1 / RATIO_CANCHA)) {
-				// Hay más espacio horizontal, ajustar desde el alto
-				altoAjustado = Math.min(CANCHA_IDEAL_ALTO, altoDisponible);
-				anchoAjustado = altoAjustado / RATIO_CANCHA;
-			} else {
-				// Hay más espacio vertical, ajustar desde el ancho
-				anchoAjustado = Math.min(CANCHA_IDEAL_ANCHO, anchoDisponible);
-				altoAjustado = anchoAjustado * RATIO_CANCHA;
-			}
-		}
-
-		// ✅ VERIFICAR LÍMITES MÍNIMOS
-		const cumpleMinimos =
-			anchoAjustado >= CANCHA_MIN_WIDTH &&
-			altoAjustado >= CANCHA_MIN_HEIGHT &&
-			anchoAjustado > altoAjustado; // ✅ FORZAR horizontal
-
-		if (cumpleMinimos) {
+		if (cabeNormal) {
+			// ✅ ORIENTACIÓN NORMAL (HORIZONTAL: 28x15)
 			mejorOrientacionCancha = {
-				width: anchoAjustado,
-				height: altoAjustado,
+				width: CANCHA_ANCHO,
+				height: CANCHA_ALTO,
 				rotada: false,
-				x: cuadrante.x + (cuadrante.width - anchoAjustado) / 2,
-				y: cuadrante.y + (cuadrante.height - altoAjustado) / 2,
+				x: cuadrante.x + (cuadrante.width - CANCHA_ANCHO) / 2,
+				y: cuadrante.y + (cuadrante.height - CANCHA_ALTO) / 2,
 			};
+			canchaRotada = false;
 
-			console.log("✅ Cancha HORIZONTAL:", {
+			console.log("✅ Cancha HORIZONTAL (28x15):", {
 				cuadrante: `${cuadrante.width.toFixed(
 					1
 				)} x ${cuadrante.height.toFixed(1)}`,
-				cancha: `${anchoAjustado.toFixed(1)} x ${altoAjustado.toFixed(
+				cancha: `${CANCHA_ANCHO} x ${CANCHA_ALTO}`,
+			});
+		} else if (cabeRotada) {
+			// ✅ ORIENTACIÓN ROTADA (VERTICAL: 15x28)
+			mejorOrientacionCancha = {
+				width: CANCHA_ALTO, // 15
+				height: CANCHA_ANCHO, // 28
+				rotada: true,
+				x: cuadrante.x + (cuadrante.width - CANCHA_ALTO) / 2,
+				y: cuadrante.y + (cuadrante.height - CANCHA_ANCHO) / 2,
+			};
+			canchaRotada = true;
+
+			console.log("✅ Cancha ROTADA (15x28):", {
+				cuadrante: `${cuadrante.width.toFixed(
 					1
-				)}`,
-				esHorizontal: anchoAjustado > altoAjustado,
-				ratio: (altoAjustado / anchoAjustado).toFixed(3),
+				)} x ${cuadrante.height.toFixed(1)}`,
+				cancha: `${CANCHA_ALTO} x ${CANCHA_ANCHO}`,
 			});
 		} else {
-			console.warn("❌ Cancha NO CABE o no cumple horizontal:", {
+			// ❌ NO CABE EN NINGUNA ORIENTACIÓN
+			console.warn("❌ Cancha 28x15 NO CABE (ni normal ni rotada):", {
 				cuadrante: `${cuadrante.width.toFixed(
 					1
 				)} x ${cuadrante.height.toFixed(1)}`,
-				intentoCancha: `${anchoAjustado.toFixed(
-					1
-				)} x ${altoAjustado.toFixed(1)}`,
-				cumpleMinimos: `ancho >= ${CANCHA_MIN_WIDTH}: ${
-					anchoAjustado >= CANCHA_MIN_WIDTH
-				}, alto >= ${CANCHA_MIN_HEIGHT}: ${
-					altoAjustado >= CANCHA_MIN_HEIGHT
-				}, horizontal: ${anchoAjustado > altoAjustado}`,
+				necesitaNormal: `${CANCHA_ANCHO} x ${CANCHA_ALTO}`,
+				necesitaRotada: `${CANCHA_ALTO} x ${CANCHA_ANCHO}`,
 			});
+			resultado.cancha = null;
+			return resultado;
 		}
 
 		resultado.cancha = mejorOrientacionCancha;
 
-		// ✅ CALCULAR ESPACIOS DISPONIBLES
-		const espaciosDisponibles = mejorOrientacionCancha
-			? {
-					top: {
-						x: cuadrante.x,
-						y: cuadrante.y,
-						width: cuadrante.width,
-						height:
-							mejorOrientacionCancha.y -
-							cuadrante.y -
-							SEPARACION_CANCHA_REDUCIDA,
-						ocupado: 0,
-					},
-					bottom: {
-						x: cuadrante.x,
-						y:
-							mejorOrientacionCancha.y +
-							mejorOrientacionCancha.height +
-							SEPARACION_CANCHA_REDUCIDA,
-						width: cuadrante.width,
-						height:
-							cuadrante.y +
-							cuadrante.height -
-							(mejorOrientacionCancha.y +
-								mejorOrientacionCancha.height) -
-							SEPARACION_CANCHA_REDUCIDA,
-						ocupado: 0,
-					},
-					left: {
-						x: cuadrante.x,
-						y: mejorOrientacionCancha.y,
-						width:
-							mejorOrientacionCancha.x -
-							cuadrante.x -
-							SEPARACION_CANCHA_REDUCIDA,
-						height: mejorOrientacionCancha.height,
-						ocupado: 0,
-					},
-					right: {
-						x:
-							mejorOrientacionCancha.x +
-							mejorOrientacionCancha.width +
-							SEPARACION_CANCHA_REDUCIDA,
-						y: mejorOrientacionCancha.y,
-						width:
-							cuadrante.x +
-							cuadrante.width -
-							(mejorOrientacionCancha.x +
-								mejorOrientacionCancha.width) -
-							SEPARACION_CANCHA_REDUCIDA,
-						height: mejorOrientacionCancha.height,
-						ocupado: 0,
-					},
-			  }
-			: {
-					bottom: {
-						x: cuadrante.x,
-						y: cuadrante.y,
-						width: cuadrante.width,
-						height: cuadrante.height,
-						ocupado: 0,
-					},
-					top: { x: 0, y: 0, width: 0, height: 0, ocupado: 0 },
-					left: { x: 0, y: 0, width: 0, height: 0, ocupado: 0 },
-					right: { x: 0, y: 0, width: 0, height: 0, ocupado: 0 },
-			  };
+		// ✅ SI NO HAY AMBIENTES, RETORNAR SOLO LA CANCHA
+		if (lateralesCancha.length === 0) {
+			console.log("ℹ️ No hay ambientes complementarios");
+			return resultado;
+		}
 
-		// ✅ DISTRIBUIR AMBIENTES
-		// ✅ PASO 1: AGRUPAR COCINA Y COMEDOR
+		// ✅ CALCULAR ESPACIOS DISPONIBLES ALREDEDOR DE LA CANCHA
+		const espaciosDisponibles = {
+			top: {
+				x: cuadrante.x,
+				y: cuadrante.y,
+				width: cuadrante.width,
+				height:
+					mejorOrientacionCancha.y - cuadrante.y - SEPARACION_CANCHA,
+				ocupado: 0,
+			},
+			bottom: {
+				x: cuadrante.x,
+				y:
+					mejorOrientacionCancha.y +
+					mejorOrientacionCancha.height +
+					SEPARACION_CANCHA,
+				width: cuadrante.width,
+				height:
+					cuadrante.y +
+					cuadrante.height -
+					(mejorOrientacionCancha.y + mejorOrientacionCancha.height) -
+					SEPARACION_CANCHA,
+				ocupado: 0,
+			},
+			left: {
+				x: cuadrante.x,
+				y: mejorOrientacionCancha.y,
+				width:
+					mejorOrientacionCancha.x - cuadrante.x - SEPARACION_CANCHA,
+				height: mejorOrientacionCancha.height,
+				ocupado: 0,
+			},
+			right: {
+				x:
+					mejorOrientacionCancha.x +
+					mejorOrientacionCancha.width +
+					SEPARACION_CANCHA,
+				y: mejorOrientacionCancha.y,
+				width:
+					cuadrante.x +
+					cuadrante.width -
+					(mejorOrientacionCancha.x + mejorOrientacionCancha.width) -
+					SEPARACION_CANCHA,
+				height: mejorOrientacionCancha.height,
+				ocupado: 0,
+			},
+		};
+
+		console.log("📐 Espacios disponibles alrededor de cancha:", {
+			rotada: canchaRotada,
+			top: `${espaciosDisponibles.top.width.toFixed(
+				1
+			)} x ${espaciosDisponibles.top.height.toFixed(1)}`,
+			bottom: `${espaciosDisponibles.bottom.width.toFixed(
+				1
+			)} x ${espaciosDisponibles.bottom.height.toFixed(1)}`,
+			left: `${espaciosDisponibles.left.width.toFixed(
+				1
+			)} x ${espaciosDisponibles.left.height.toFixed(1)}`,
+			right: `${espaciosDisponibles.right.width.toFixed(
+				1
+			)} x ${espaciosDisponibles.right.height.toFixed(1)}`,
+		});
+
+		// ✅ AGRUPAR COCINA Y COMEDOR SI EXISTEN
 		const ambientesAgrupados = [];
 		const cocina = lateralesCancha.find((a) =>
 			a.nombre.toLowerCase().includes("cocina")
@@ -3028,18 +2314,15 @@ EOF
 			a.nombre.toLowerCase().includes("comedor")
 		);
 
-		// Si hay cocina Y comedor, agruparlos
 		if (cocina && comedor) {
 			ambientesAgrupados.push({
 				tipo: "grupo_cocina_comedor",
 				ambientes: [cocina, comedor],
-				// El ancho total es la suma (van uno al lado del otro)
 				ancho: cocina.ancho + comedor.ancho,
 				alto: Math.max(cocina.alto, comedor.alto),
 				nombre: "Cocina + Comedor",
 			});
 
-			// Agregar el resto de ambientes (excepto cocina y comedor)
 			lateralesCancha.forEach((ambiente) => {
 				if (ambiente !== cocina && ambiente !== comedor) {
 					ambientesAgrupados.push({
@@ -3052,7 +2335,6 @@ EOF
 				}
 			});
 		} else {
-			// Si no hay grupo, todos son individuales
 			lateralesCancha.forEach((ambiente) => {
 				ambientesAgrupados.push({
 					tipo: "individual",
@@ -3067,7 +2349,7 @@ EOF
 		// Ordenar por área (más grandes primero)
 		ambientesAgrupados.sort((a, b) => b.ancho * b.alto - a.ancho * a.alto);
 
-		// ✅ PASO 2: DISTRIBUIR POR LADO Y CALCULAR POSICIONES
+		// ✅ DISTRIBUIR AMBIENTES EN LOS ESPACIOS DISPONIBLES
 		const ambientesPorLado = {
 			bottom: [],
 			top: [],
@@ -3093,7 +2375,6 @@ EOF
 
 					if (cabe) {
 						puntuacion = espacioRestante - grupo.ancho;
-						// Preferencia: bottom > top
 						if (nombreLado === "bottom") puntuacion += 100;
 						if (nombreLado === "top") puntuacion += 80;
 					}
@@ -3106,7 +2387,6 @@ EOF
 
 					if (cabe) {
 						puntuacion = espacioRestante - grupo.alto;
-						// Preferencia: left > right (para cocina/comedor cerca de entrada)
 						if (nombreLado === "left") puntuacion += 90;
 						if (nombreLado === "right") puntuacion += 60;
 					}
@@ -3122,19 +2402,17 @@ EOF
 				const espacio = espaciosDisponibles[mejorLado];
 				ambientesPorLado[mejorLado].push(grupo);
 
-				// Marcar espacio ocupado
 				if (mejorLado === "bottom" || mejorLado === "top") {
 					espacio.ocupado += grupo.ancho;
 				} else {
 					espacio.ocupado += grupo.alto;
 				}
 			} else {
-				console.warn("⚠️ Grupo sin espacio:", grupo.nombre);
+				console.warn("⚠️ Ambiente NO CABE:", grupo.nombre);
 			}
 		});
 
-		// ✅ PASO 3: CALCULAR POSICIONES CENTRADAS Y PEGADAS A LA CANCHA
-
+		// ✅ CALCULAR POSICIONES EXACTAS Y CENTRADAS
 		Object.keys(ambientesPorLado).forEach((nombreLado) => {
 			const grupos = ambientesPorLado[nombreLado];
 			if (grupos.length === 0) return;
@@ -3142,49 +2420,20 @@ EOF
 			const espacio = espaciosDisponibles[nombreLado];
 
 			if (nombreLado === "bottom" || nombreLado === "top") {
-				// ===================================
 				// HORIZONTAL
-				// ===================================
 				const anchoTotal = grupos.reduce((sum, g) => sum + g.ancho, 0);
+				let posicionInicialX =
+					mejorOrientacionCancha.x +
+					(mejorOrientacionCancha.width - anchoTotal) / 2;
+				let posicionY =
+					nombreLado === "bottom"
+						? mejorOrientacionCancha.y +
+						  mejorOrientacionCancha.height +
+						  SEPARACION_CANCHA
+						: mejorOrientacionCancha.y -
+						  SEPARACION_CANCHA -
+						  Math.max(...grupos.map((g) => g.alto));
 
-				let posicionInicialX, posicionY;
-
-				if (mejorOrientacionCancha) {
-					// ✅ CON CANCHA: Centrar alrededor de la cancha
-					posicionInicialX =
-						mejorOrientacionCancha.x +
-						(mejorOrientacionCancha.width - anchoTotal) / 2;
-
-					if (nombreLado === "bottom") {
-						posicionY =
-							mejorOrientacionCancha.y +
-							mejorOrientacionCancha.height +
-							SEPARACION_CANCHA_REDUCIDA;
-					} else {
-						const altoMaximo = Math.max(
-							...grupos.map((g) => g.alto)
-						);
-						posicionY =
-							mejorOrientacionCancha.y -
-							SEPARACION_CANCHA_REDUCIDA -
-							altoMaximo;
-					}
-				} else {
-					// ✅ SIN CANCHA: Centrar en el cuadrante completo
-					posicionInicialX =
-						espacio.x + (espacio.width - anchoTotal) / 2;
-
-					if (nombreLado === "bottom") {
-						posicionY = espacio.y;
-					} else {
-						const altoMaximo = Math.max(
-							...grupos.map((g) => g.alto)
-						);
-						posicionY = espacio.y + espacio.height - altoMaximo;
-					}
-				}
-
-				// Colocar grupos
 				grupos.forEach((grupo) => {
 					const AJUSTE_PEGADO = 0.1;
 
@@ -3197,7 +2446,6 @@ EOF
 								x: posicionInicialX,
 								y: posicionY,
 							});
-
 							resultado.ambientesBottom.push({
 								...comedor,
 								x:
@@ -3212,7 +2460,6 @@ EOF
 								x: posicionInicialX,
 								y: posicionY,
 							});
-
 							resultado.ambientesTop.push({
 								...comedor,
 								x:
@@ -3243,49 +2490,20 @@ EOF
 					posicionInicialX += grupo.ancho;
 				});
 			} else {
-				// ===================================
 				// VERTICAL
-				// ===================================
 				const altoTotal = grupos.reduce((sum, g) => sum + g.alto, 0);
+				let posicionInicialY =
+					mejorOrientacionCancha.y +
+					(mejorOrientacionCancha.height - altoTotal) / 2;
+				let posicionX =
+					nombreLado === "left"
+						? mejorOrientacionCancha.x -
+						  SEPARACION_CANCHA -
+						  Math.max(...grupos.map((g) => g.ancho))
+						: mejorOrientacionCancha.x +
+						  mejorOrientacionCancha.width +
+						  SEPARACION_CANCHA;
 
-				let posicionInicialY, posicionX;
-
-				if (mejorOrientacionCancha) {
-					// ✅ CON CANCHA: Centrar alrededor de la cancha
-					posicionInicialY =
-						mejorOrientacionCancha.y +
-						(mejorOrientacionCancha.height - altoTotal) / 2;
-
-					if (nombreLado === "left") {
-						const anchoMaximo = Math.max(
-							...grupos.map((g) => g.ancho)
-						);
-						posicionX =
-							mejorOrientacionCancha.x -
-							SEPARACION_CANCHA_REDUCIDA -
-							anchoMaximo;
-					} else {
-						posicionX =
-							mejorOrientacionCancha.x +
-							mejorOrientacionCancha.width +
-							SEPARACION_CANCHA_REDUCIDA;
-					}
-				} else {
-					// ✅ SIN CANCHA: Centrar en el cuadrante completo
-					posicionInicialY =
-						espacio.y + (espacio.height - altoTotal) / 2;
-
-					if (nombreLado === "left") {
-						const anchoMaximo = Math.max(
-							...grupos.map((g) => g.ancho)
-						);
-						posicionX = espacio.x + espacio.width - anchoMaximo;
-					} else {
-						posicionX = espacio.x;
-					}
-				}
-
-				// Colocar grupos
 				grupos.forEach((grupo) => {
 					const AJUSTE_PEGADO = 0.1;
 
@@ -3298,7 +2516,6 @@ EOF
 								x: posicionX,
 								y: posicionInicialY,
 							});
-
 							resultado.ambientesLeft.push({
 								...comedor,
 								x: posicionX,
@@ -3313,7 +2530,6 @@ EOF
 								x: posicionX,
 								y: posicionInicialY,
 							});
-
 							resultado.ambientesRight.push({
 								...comedor,
 								x: posicionX,
@@ -3346,7 +2562,8 @@ EOF
 			}
 		});
 
-		console.log("📐 Distribución de ambientes:", {
+		console.log("📦 Distribución de ambientes:", {
+			canchaRotada: canchaRotada,
 			bottom: ambientesPorLado.bottom.map((g) => g.nombre),
 			top: ambientesPorLado.top.map((g) => g.nombre),
 			left: ambientesPorLado.left.map((g) => g.nombre),
@@ -3422,123 +2639,172 @@ EOF
 		};
 	};
 
-	const findMaxRectangleAtAngle = (polygon, angle) => {
-		const center = {
-			east: polygon.reduce((sum, p) => sum + p.east, 0) / polygon.length,
-			north:
-				polygon.reduce((sum, p) => sum + p.north, 0) / polygon.length,
-		};
+	// const calculateCapacityForRectangle = (rect) => {
+	// 	const rectWidth = rect.width;
+	// 	const rectHeight = rect.height;
+	// 	const verticalSpace = rectHeight - CIRCULACION_LATERAL * 2;
+	// 	const horizontalSpace = rectWidth - CIRCULACION_LATERAL * 2;
 
-		const rotatedPolygon = polygon.map((p) =>
-			rotatePoint(p, -angle, center)
-		);
+	// 	// Clasificar ambientes
+	// 	const { enPabellones, superiores } =
+	// 		classifyAmbientes(arrayTransformado);
 
-		const easts = rotatedPolygon.map((p) => p.east);
-		const norths = rotatedPolygon.map((p) => p.north);
-		const minE = Math.min(...easts);
-		const maxE = Math.max(...easts);
-		const minN = Math.min(...norths);
-		const maxN = Math.max(...norths);
+	// 	// ✅ CALCULAR ESPACIO TOTAL DE AMBIENTES
+	// 	const ambientesPrimariaTotal = enPabellones
+	// 		.filter((a) => a.pabellon === "primaria")
+	// 		.reduce((sum, amb) => sum + amb.alto, 0);
 
-		let maxArea = 0;
-		let bestRect = null;
+	// 	const ambientesSecundariaTotal = enPabellones
+	// 		.filter((a) => a.pabellon === "secundaria")
+	// 		.reduce((sum, amb) => sum + amb.alto, 0);
 
-		const step = (maxE - minE) / 20;
+	// 	const ambientesInicialTotal = enPabellones
+	// 		.filter((a) => a.pabellon === "inicial")
+	// 		.reduce((sum, amb) => sum + amb.ancho, 0);
 
-		for (let x1 = minE; x1 < maxE; x1 += step) {
-			for (let y1 = minN; y1 < maxN; y1 += step) {
-				for (let x2 = x1 + step; x2 <= maxE; x2 += step) {
-					for (let y2 = y1 + step; y2 <= maxN; y2 += step) {
-						const corners = [
-							{ east: x1, north: y1 },
-							{ east: x2, north: y1 },
-							{ east: x2, north: y2 },
-							{ east: x1, north: y2 },
-						];
+	// 	const hayAmbientesEnPrimaria = enPabellones.some(
+	// 		(a) => a.pabellon === "primaria"
+	// 	);
+	// 	const hayAmbientesEnSecundaria = enPabellones.some(
+	// 		(a) => a.pabellon === "secundaria"
+	// 	);
 
-						const allInside = corners.every((corner) =>
-							isPointInPolygon(corner, rotatedPolygon)
-						);
+	// 	// Calcular espacio ocupado por ambientes superiores
+	// 	const totalAmbientesSuperioresWidth = superiores.reduce(
+	// 		(sum, amb) => sum + amb.ancho,
+	// 		0
+	// 	);
+	// 	const maxAmbientesSuperioresHeight =
+	// 		superiores.length > 0
+	// 			? Math.max(...superiores.map((amb) => amb.alto))
+	// 			: 0;
 
-						if (allInside) {
-							const area = (x2 - x1) * (y2 - y1);
-							if (area > maxArea) {
-								maxArea = area;
-								bestRect = { x1, y1, x2, y2 };
-							}
-						}
-					}
-				}
-			}
-		}
+	// 	// ✅ CALCULAR CAPACIDADES SEGÚN EL MODO ACTUAL
+	// 	let maxInicialClassrooms,
+	// 		maxPrimariaClassrooms,
+	// 		maxSecundariaClassrooms;
 
-		if (!bestRect) return null;
+	// 	if (layoutMode === "horizontal") {
+	// 		// MODO HORIZONTAL: Inicial abajo (horizontal), Primaria/Secundaria laterales (vertical)
 
-		const rectCorners = [
-			{ east: bestRect.x1, north: bestRect.y1 },
-			{ east: bestRect.x2, north: bestRect.y1 },
-			{ east: bestRect.x2, north: bestRect.y2 },
-			{ east: bestRect.x1, north: bestRect.y2 },
-		].map((p) => rotatePoint(p, angle, center));
+	// 		// INICIAL - horizontal, restar entrada
+	// 		const inicialSpace = horizontalSpace - ENTRADA_WIDTH;
+	// 		const inicialNeedsServices = BANO_WIDTH + ESCALERA_WIDTH;
+	// 		const inicialAvailableForClassrooms =
+	// 			inicialSpace - inicialNeedsServices - ambientesInicialTotal;
+	// 		maxInicialClassrooms = Math.floor(
+	// 			inicialAvailableForClassrooms / CLASSROOM_WIDTH
+	// 		);
 
-		return {
-			corners: rectCorners,
-			area: maxArea,
-			width: Math.abs(bestRect.x2 - bestRect.x1),
-			height: Math.abs(bestRect.y2 - bestRect.y1),
-			angle: (angle * 180) / Math.PI,
-		};
-	};
+	// 		// PRIMARIA - vertical, reducir por ambientes
+	// 		const primariaSpace =
+	// 			verticalSpace - CLASSROOM_HEIGHT - CIRCULACION_ENTRE_PABELLONES;
+	// 		const primariaNeedsServices = BANO_HEIGHT + ESCALERA_HEIGHT;
+	// 		const primariaAvailableForClassrooms =
+	// 			primariaSpace - primariaNeedsServices - ambientesPrimariaTotal;
+	// 		maxPrimariaClassrooms = Math.floor(
+	// 			primariaAvailableForClassrooms / CLASSROOM_HEIGHT
+	// 		);
 
-	const calculateMaxRectangle = () => {
-		if (coordinates.length < 3) return;
+	// 		// SECUNDARIA - vertical, reducir por ambientes
+	// 		const secundariaSpace =
+	// 			verticalSpace - CLASSROOM_HEIGHT - CIRCULACION_ENTRE_PABELLONES;
+	// 		const secundariaNeedsServices = BANO_HEIGHT + ESCALERA_HEIGHT;
+	// 		const secundariaAvailableForClassrooms =
+	// 			secundariaSpace -
+	// 			secundariaNeedsServices -
+	// 			ambientesSecundariaTotal;
+	// 		maxSecundariaClassrooms = Math.floor(
+	// 			secundariaAvailableForClassrooms / CLASSROOM_HEIGHT
+	// 		);
+	// 	} else {
+	// 		// MODO VERTICAL: Primaria abajo (horizontal), Secundaria arriba (horizontal), Inicial lateral (vertical)
 
-		setIsCalculating(true);
+	// 		// PRIMARIA - horizontal, reducir por ambientes (convertir alto a ancho)
+	// 		const primariaSpace = horizontalSpace;
+	// 		const primariaNeedsServices = BANO_WIDTH + ESCALERA_WIDTH;
+	// 		// En modo vertical, los ambientes de primaria van horizontalmente
+	// 		const ambientesPrimariaHorizontal = enPabellones
+	// 			.filter((a) => a.pabellon === "primaria")
+	// 			.reduce((sum, amb) => sum + amb.ancho, 0);
+	// 		const primariaAvailableForClassrooms =
+	// 			primariaSpace -
+	// 			primariaNeedsServices -
+	// 			ambientesPrimariaHorizontal;
+	// 		maxPrimariaClassrooms = Math.floor(
+	// 			primariaAvailableForClassrooms / CLASSROOM_WIDTH
+	// 		);
 
-		setTimeout(() => {
-			let bestRectangle = null;
-			let maxArea = 0;
+	// 		// SECUNDARIA - horizontal, reducir por ambientes
+	// 		const secundariaSpace = horizontalSpace;
+	// 		const secundariaNeedsServices = BANO_WIDTH + ESCALERA_WIDTH;
+	// 		const ambientesSecundariaHorizontal = enPabellones
+	// 			.filter((a) => a.pabellon === "secundaria")
+	// 			.reduce((sum, amb) => sum + amb.ancho, 0);
+	// 		const secundariaAvailableForClassrooms =
+	// 			secundariaSpace -
+	// 			secundariaNeedsServices -
+	// 			ambientesSecundariaHorizontal;
+	// 		maxSecundariaClassrooms = Math.floor(
+	// 			secundariaAvailableForClassrooms / CLASSROOM_WIDTH
+	// 		);
 
-			for (let degrees = 0; degrees < 180; degrees += 5) {
-				const angle = (degrees * Math.PI) / 180;
-				const rect = findMaxRectangleAtAngle(coordinates, angle);
+	// 		// INICIAL - vertical, reducir por ambientes
+	// 		const inicialSpace =
+	// 			verticalSpace -
+	// 			CLASSROOM_HEIGHT * 2 -
+	// 			CIRCULACION_ENTRE_PABELLONES * 2;
+	// 		const inicialNeedsServices = BANO_HEIGHT + ESCALERA_HEIGHT;
+	// 		// En modo vertical, los ambientes de inicial van verticalmente
+	// 		const ambientesInicialVertical = enPabellones
+	// 			.filter((a) => a.pabellon === "inicial")
+	// 			.reduce((sum, amb) => sum + amb.alto, 0);
+	// 		const inicialAvailableForClassrooms =
+	// 			inicialSpace - inicialNeedsServices - ambientesInicialVertical;
+	// 		maxInicialClassrooms = Math.floor(
+	// 			inicialAvailableForClassrooms / CLASSROOM_HEIGHT
+	// 		);
+	// 	}
 
-				if (rect && rect.area > maxArea) {
-					maxArea = rect.area;
-					bestRectangle = rect;
-				}
-			}
+	// 	const capacityData = {
+	// 		inicial: { max: maxInicialClassrooms },
+	// 		primaria: {
+	// 			max: maxPrimariaClassrooms,
+	// 			hasBiblioteca: hayAmbientesEnPrimaria,
+	// 		},
+	// 		secundaria: {
+	// 			max: maxSecundariaClassrooms,
+	// 			hasLaboratorio: hayAmbientesEnSecundaria,
+	// 		},
+	// 		ambientesSuperiores: {
+	// 			totalWidth: totalAmbientesSuperioresWidth,
+	// 			maxHeight: maxAmbientesSuperioresHeight,
+	// 			availableWidth: rectWidth - CIRCULACION_LATERAL * 2,
+	// 		},
+	// 	};
+	// 	// ✅ SETEAR EL ESTADO (para que se muestre en la UI si lo necesitas)
+	// 	setCapacityInfo(capacityData);
 
-			if (bestRectangle) {
-				const bestAngle = (bestRectangle.angle * Math.PI) / 180;
-				for (let offset = -5; offset <= 5; offset += 0.5) {
-					const angle = bestAngle + (offset * Math.PI) / 180;
-					const rect = findMaxRectangleAtAngle(coordinates, angle);
-
-					if (rect && rect.area > maxArea) {
-						maxArea = rect.area;
-						bestRectangle = rect;
-					}
-				}
-			}
-			//console.log("best rectangle:::", bestRectangle);
-
-			setMaxRectangle(bestRectangle);
-			setIsCalculating(false);
-			//console.log("maximo rectangulo::::", maxRectangle);
-			calculateCapacity();
-		}, 100);
-	};
-
+	// 	// ✅ RETORNAR EL OBJETO (para usarlo inmediatamente)
+	// 	return capacityData;
+	// };
 	const calculateCapacityForRectangle = (rect) => {
-		const rectWidth = rect.width - RETIRO_TERRENO * 2;
-		const rectHeight = rect.height - RETIRO_TERRENO * 2;
-		const verticalSpace = rectHeight - CIRCULACION_LATERAL;
-		const horizontalSpace = rectWidth - CIRCULACION_LATERAL * 2;
+		const rectWidth = rect.width;
+		const rectHeight = rect.height;
+
+		// ✅ Espacios base con retiro del terreno
+		const RETIRO_TERRENO = 0.5;
+		const rectWidthUsable = rectWidth - RETIRO_TERRENO * 2;
+		const rectHeightUsable = rectHeight - RETIRO_TERRENO * 2;
 
 		// Clasificar ambientes
-		const { enPabellones, superiores } =
-			classifyAmbientes(arrayTransformado);
+		const hayPrimaria = parseInt(classroomPrimaria) > 0;
+		const haySecundaria = parseInt(classroomSecundaria) > 0;
+		const { enPabellones, lateralesCancha, superiores } = classifyAmbientes(
+			arrayTransformado,
+			hayPrimaria,
+			haySecundaria
+		);
 
 		// ✅ CALCULAR ESPACIO TOTAL DE AMBIENTES
 		const ambientesPrimariaTotal = enPabellones
@@ -3578,115 +2844,451 @@ EOF
 		if (layoutMode === "horizontal") {
 			// MODO HORIZONTAL: Inicial abajo (horizontal), Primaria/Secundaria laterales (vertical)
 
-			// INICIAL - horizontal, restar entrada
-			const inicialSpace = horizontalSpace - ENTRADA_WIDTH;
+			// ===================================
+			// INICIAL - horizontal
+			// ===================================
+			const inicialSpace =
+				rectWidthUsable - CIRCULACION_LATERAL * 2 - ENTRADA_WIDTH;
+
+			// Baño y escalera solo si hay posibilidad de segundo piso
+			// Por ahora siempre los consideramos para calcular capacidad
 			const inicialNeedsServices = BANO_WIDTH + ESCALERA_WIDTH;
+
 			const inicialAvailableForClassrooms =
 				inicialSpace - inicialNeedsServices - ambientesInicialTotal;
+
 			maxInicialClassrooms = Math.floor(
 				inicialAvailableForClassrooms / CLASSROOM_WIDTH
 			);
 
-			// PRIMARIA - vertical, reducir por ambientes
+			console.log("📊 Capacidad INICIAL (horizontal):", {
+				espacioTotal: inicialSpace.toFixed(1),
+				servicios: inicialNeedsServices.toFixed(1),
+				ambientes: ambientesInicialTotal.toFixed(1),
+				disponibleAulas: inicialAvailableForClassrooms.toFixed(1),
+				maxAulas: maxInicialClassrooms,
+			});
+
+			// ===================================
+			// PRIMARIA - vertical
+			// ===================================
 			const primariaSpace =
-				verticalSpace - CLASSROOM_HEIGHT - CIRCULACION_ENTRE_PABELLONES;
+				rectHeightUsable -
+				CLASSROOM_HEIGHT - // Pabellón inicial
+				CIRCULACION_ENTRE_PABELLONES - // Circulación entre inicial y primaria
+				CIRCULACION_LATERAL * 2; // Circulación arriba y abajo
+
 			const primariaNeedsServices = BANO_HEIGHT + ESCALERA_HEIGHT;
+
 			const primariaAvailableForClassrooms =
 				primariaSpace - primariaNeedsServices - ambientesPrimariaTotal;
+
 			maxPrimariaClassrooms = Math.floor(
 				primariaAvailableForClassrooms / CLASSROOM_HEIGHT
 			);
 
-			// SECUNDARIA - vertical, reducir por ambientes
+			console.log("📊 Capacidad PRIMARIA (vertical):", {
+				espacioTotal: primariaSpace.toFixed(1),
+				servicios: primariaNeedsServices.toFixed(1),
+				ambientes: ambientesPrimariaTotal.toFixed(1),
+				disponibleAulas: primariaAvailableForClassrooms.toFixed(1),
+				maxAulas: maxPrimariaClassrooms,
+			});
+
+			// ===================================
+			// SECUNDARIA - vertical
+			// ===================================
 			const secundariaSpace =
-				verticalSpace - CLASSROOM_HEIGHT - CIRCULACION_ENTRE_PABELLONES;
+				rectHeightUsable -
+				CLASSROOM_HEIGHT - // Pabellón inicial
+				CIRCULACION_ENTRE_PABELLONES - // Circulación entre inicial y secundaria
+				CIRCULACION_LATERAL * 2; // Circulación arriba y abajo
+
 			const secundariaNeedsServices = BANO_HEIGHT + ESCALERA_HEIGHT;
+
 			const secundariaAvailableForClassrooms =
 				secundariaSpace -
 				secundariaNeedsServices -
 				ambientesSecundariaTotal;
+
 			maxSecundariaClassrooms = Math.floor(
 				secundariaAvailableForClassrooms / CLASSROOM_HEIGHT
 			);
+
+			console.log("📊 Capacidad SECUNDARIA (vertical):", {
+				espacioTotal: secundariaSpace.toFixed(1),
+				servicios: secundariaNeedsServices.toFixed(1),
+				ambientes: ambientesSecundariaTotal.toFixed(1),
+				disponibleAulas: secundariaAvailableForClassrooms.toFixed(1),
+				maxAulas: maxSecundariaClassrooms,
+			});
 		} else {
 			// MODO VERTICAL: Primaria abajo (horizontal), Secundaria arriba (horizontal), Inicial lateral (vertical)
 
-			// PRIMARIA - horizontal, reducir por ambientes (convertir alto a ancho)
-			const primariaSpace = horizontalSpace;
+			// ===================================
+			// PRIMARIA - horizontal
+			// ===================================
+			const primariaSpace = rectWidthUsable - CIRCULACION_LATERAL * 2;
+
 			const primariaNeedsServices = BANO_WIDTH + ESCALERA_WIDTH;
+
 			// En modo vertical, los ambientes de primaria van horizontalmente
 			const ambientesPrimariaHorizontal = enPabellones
 				.filter((a) => a.pabellon === "primaria")
 				.reduce((sum, amb) => sum + amb.ancho, 0);
+
 			const primariaAvailableForClassrooms =
 				primariaSpace -
 				primariaNeedsServices -
 				ambientesPrimariaHorizontal;
+
 			maxPrimariaClassrooms = Math.floor(
 				primariaAvailableForClassrooms / CLASSROOM_WIDTH
 			);
 
-			// SECUNDARIA - horizontal, reducir por ambientes
-			const secundariaSpace = horizontalSpace;
+			console.log("📊 Capacidad PRIMARIA (horizontal):", {
+				espacioTotal: primariaSpace.toFixed(1),
+				servicios: primariaNeedsServices.toFixed(1),
+				ambientes: ambientesPrimariaHorizontal.toFixed(1),
+				disponibleAulas: primariaAvailableForClassrooms.toFixed(1),
+				maxAulas: maxPrimariaClassrooms,
+			});
+
+			// ===================================
+			// SECUNDARIA - horizontal
+			// ===================================
+			const secundariaSpace = rectWidthUsable - CIRCULACION_LATERAL * 2;
+
 			const secundariaNeedsServices = BANO_WIDTH + ESCALERA_WIDTH;
+
 			const ambientesSecundariaHorizontal = enPabellones
 				.filter((a) => a.pabellon === "secundaria")
 				.reduce((sum, amb) => sum + amb.ancho, 0);
+
 			const secundariaAvailableForClassrooms =
 				secundariaSpace -
 				secundariaNeedsServices -
 				ambientesSecundariaHorizontal;
+
 			maxSecundariaClassrooms = Math.floor(
 				secundariaAvailableForClassrooms / CLASSROOM_WIDTH
 			);
 
-			// INICIAL - vertical, reducir por ambientes
+			console.log("📊 Capacidad SECUNDARIA (horizontal):", {
+				espacioTotal: secundariaSpace.toFixed(1),
+				servicios: secundariaNeedsServices.toFixed(1),
+				ambientes: ambientesSecundariaHorizontal.toFixed(1),
+				disponibleAulas: secundariaAvailableForClassrooms.toFixed(1),
+				maxAulas: maxSecundariaClassrooms,
+			});
+
+			// ===================================
+			// INICIAL - vertical
+			// ===================================
 			const inicialSpace =
-				verticalSpace -
-				CLASSROOM_HEIGHT * 2 -
-				CIRCULACION_ENTRE_PABELLONES * 2;
+				rectHeightUsable -
+				CLASSROOM_HEIGHT * 2 - // Pabellones primaria y secundaria
+				CIRCULACION_ENTRE_PABELLONES * 2 - // Circulación entre pabellones
+				CIRCULACION_LATERAL * 2; // Circulación arriba y abajo
+
 			const inicialNeedsServices = BANO_HEIGHT + ESCALERA_HEIGHT;
+
 			// En modo vertical, los ambientes de inicial van verticalmente
 			const ambientesInicialVertical = enPabellones
 				.filter((a) => a.pabellon === "inicial")
 				.reduce((sum, amb) => sum + amb.alto, 0);
+
 			const inicialAvailableForClassrooms =
 				inicialSpace - inicialNeedsServices - ambientesInicialVertical;
+
 			maxInicialClassrooms = Math.floor(
 				inicialAvailableForClassrooms / CLASSROOM_HEIGHT
 			);
+
+			console.log("📊 Capacidad INICIAL (vertical):", {
+				espacioTotal: inicialSpace.toFixed(1),
+				servicios: inicialNeedsServices.toFixed(1),
+				ambientes: ambientesInicialVertical.toFixed(1),
+				disponibleAulas: inicialAvailableForClassrooms.toFixed(1),
+				maxAulas: maxInicialClassrooms,
+			});
 		}
 
 		const capacityData = {
-			inicial: { max: maxInicialClassrooms },
+			inicial: { max: Math.max(0, maxInicialClassrooms) },
 			primaria: {
-				max: maxPrimariaClassrooms,
+				max: Math.max(0, maxPrimariaClassrooms),
 				hasBiblioteca: hayAmbientesEnPrimaria,
 			},
 			secundaria: {
-				max: maxSecundariaClassrooms,
+				max: Math.max(0, maxSecundariaClassrooms),
 				hasLaboratorio: hayAmbientesEnSecundaria,
 			},
 			ambientesSuperiores: {
 				totalWidth: totalAmbientesSuperioresWidth,
 				maxHeight: maxAmbientesSuperioresHeight,
-				availableWidth: rectWidth - CIRCULACION_LATERAL * 2,
+				availableWidth: rectWidthUsable - CIRCULACION_LATERAL * 2,
 			},
 		};
-		// ✅ SETEAR EL ESTADO (para que se muestre en la UI si lo necesitas)
-		setCapacityInfo(capacityData);
 
-		// ✅ RETORNAR EL OBJETO (para usarlo inmediatamente)
+		setCapacityInfo(capacityData);
 		return capacityData;
 	};
 
 	const calculateCapacity = () => {
-		console.log("Calculando capacidad en modo:", layoutMode);
 		if (maxRectangle) {
 			return calculateCapacityForRectangle(maxRectangle);
 		}
 		return null;
 	};
+
+	// const calculateHorizontalDistribution = (
+	// 	inicialTotal,
+	// 	primariaTotal,
+	// 	secundariaTotal,
+	// 	enPabellones,
+	// 	lateralesCancha,
+	// 	superiores,
+	// 	currentCapacity
+	// ) => {
+	// 	// ✅ CALCULAR ESPACIO TOTAL DE AMBIENTES
+	// 	const ambientesPrimariaTotal = enPabellones
+	// 		.filter((a) => a.pabellon === "primaria")
+	// 		.reduce((sum, amb) => sum + amb.alto, 0);
+
+	// 	const ambientesSecundariaTotal = enPabellones
+	// 		.filter((a) => a.pabellon === "secundaria")
+	// 		.reduce((sum, amb) => sum + amb.alto, 0);
+
+	// 	const ambientesInicialTotal = enPabellones
+	// 		.filter((a) => a.pabellon === "inicial")
+	// 		.reduce((sum, amb) => sum + amb.ancho, 0);
+
+	// 	// LÓGICA: Si no hay inicial, usar ese pabellón para el nivel con más aulas
+	// 	let usarPabellonInferiorPara = "inicial";
+	// 	let aulasEnPabellonInferior = inicialTotal;
+
+	// 	if (inicialTotal === 0) {
+	// 		if (primariaTotal > secundariaTotal) {
+	// 			usarPabellonInferiorPara = "primaria";
+	// 			aulasEnPabellonInferior = Math.min(
+	// 				primariaTotal,
+	// 				currentCapacity.inicial.max
+	// 			);
+	// 		} else if (secundariaTotal > 0) {
+	// 			usarPabellonInferiorPara = "secundaria";
+	// 			aulasEnPabellonInferior = Math.min(
+	// 				secundariaTotal,
+	// 				currentCapacity.inicial.max
+	// 			);
+	// 		}
+	// 	}
+
+	// 	// Calcular distribución según el caso
+	// 	let inicialFloor1 = 0,
+	// 		inicialFloor2 = 0;
+	// 	let primariaFloor1 = 0,
+	// 		primariaFloor2 = 0;
+	// 	let secundariaFloor1 = 0,
+	// 		secundariaFloor2 = 0;
+
+	// 	if (usarPabellonInferiorPara === "inicial") {
+	// 		inicialFloor1 = Math.min(inicialTotal, currentCapacity.inicial.max);
+	// 		inicialFloor2 = inicialTotal - inicialFloor1;
+	// 		primariaFloor1 = Math.min(
+	// 			primariaTotal,
+	// 			currentCapacity.primaria.max
+	// 		);
+	// 		primariaFloor2 = primariaTotal - primariaFloor1;
+	// 		secundariaFloor1 = Math.min(
+	// 			secundariaTotal,
+	// 			currentCapacity.secundaria.max
+	// 		);
+	// 		secundariaFloor2 = secundariaTotal - secundariaFloor1;
+	// 	} else if (usarPabellonInferiorPara === "primaria") {
+	// 		const primariaEnInferior = Math.min(
+	// 			primariaTotal,
+	// 			currentCapacity.inicial.max
+	// 		);
+	// 		const primariaRestante = primariaTotal - primariaEnInferior;
+	// 		inicialFloor1 = primariaEnInferior;
+	// 		primariaFloor1 = Math.min(
+	// 			primariaRestante,
+	// 			currentCapacity.primaria.max
+	// 		);
+	// 		primariaFloor2 = primariaRestante - primariaFloor1;
+	// 		secundariaFloor1 = Math.min(
+	// 			secundariaTotal,
+	// 			currentCapacity.secundaria.max
+	// 		);
+	// 		secundariaFloor2 = secundariaTotal - secundariaFloor1;
+	// 	} else if (usarPabellonInferiorPara === "secundaria") {
+	// 		const secundariaEnInferior = Math.min(
+	// 			secundariaTotal,
+	// 			currentCapacity.inicial.max
+	// 		);
+	// 		const secundariaRestante = secundariaTotal - secundariaEnInferior;
+	// 		inicialFloor1 = secundariaEnInferior;
+	// 		secundariaFloor1 = Math.min(
+	// 			secundariaRestante,
+	// 			currentCapacity.secundaria.max
+	// 		);
+	// 		secundariaFloor2 = secundariaRestante - secundariaFloor1;
+	// 		primariaFloor1 = Math.min(
+	// 			primariaTotal,
+	// 			currentCapacity.primaria.max
+	// 		);
+	// 		primariaFloor2 = primariaTotal - primariaFloor1;
+	// 	}
+
+	// 	const POSICION_ESCALERA = 1;
+
+	// 	// DISTRIBUCIÓN DE AMBIENTES SUPERIORES
+	// 	const superioresFloor1 = [];
+	// 	const superioresFloor2 = [];
+	// 	const ambientesInicialLibre = [];
+	// 	const ambientesPrimariaLibre = [];
+	// 	const ambientesSecundariaLibre = [];
+
+	// 	const anchoDisponibleSuperior =
+	// 		maxRectangle.width - CIRCULACION_LATERAL * 2 - ENTRADA_WIDTH;
+
+	// 	let anchoAcumuladoFloor1 = 0;
+
+	// 	superiores.forEach((amb) => {
+	// 		if (anchoAcumuladoFloor1 + amb.ancho <= anchoDisponibleSuperior) {
+	// 			superioresFloor1.push(amb);
+	// 			anchoAcumuladoFloor1 += amb.ancho;
+	// 		} else {
+	// 			superioresFloor2.push(amb);
+	// 		}
+	// 	});
+
+	// 	// Calcular espacios libres
+	// 	const espaciosLibresFloor1 = {
+	// 		inicial: Math.max(
+	// 			0,
+	// 			maxRectangle.width -
+	// 				CIRCULACION_LATERAL * 2 -
+	// 				ENTRADA_WIDTH -
+	// 				inicialFloor1 * CLASSROOM_WIDTH -
+	// 				(inicialFloor1 > 0 ? BANO_WIDTH + ESCALERA_WIDTH : 0) -
+	// 				ambientesInicialTotal
+	// 		),
+	// 		primaria: Math.max(
+	// 			0,
+	// 			maxRectangle.height -
+	// 				CLASSROOM_HEIGHT -
+	// 				CIRCULACION_ENTRE_PABELLONES -
+	// 				primariaFloor1 * CLASSROOM_HEIGHT -
+	// 				(primariaFloor1 > 0 ? BANO_HEIGHT + ESCALERA_HEIGHT : 0) -
+	// 				ambientesPrimariaTotal
+	// 		),
+	// 		secundaria: Math.max(
+	// 			0,
+	// 			maxRectangle.height -
+	// 				CLASSROOM_HEIGHT -
+	// 				CIRCULACION_ENTRE_PABELLONES -
+	// 				secundariaFloor1 * CLASSROOM_HEIGHT -
+	// 				(secundariaFloor1 > 0 ? BANO_HEIGHT + ESCALERA_HEIGHT : 0) -
+	// 				ambientesSecundariaTotal
+	// 		),
+	// 	};
+
+	// 	// Intentar colocar ambientes sobrantes en espacios libres
+	// 	const ambientesRestantes = [];
+	// 	superioresFloor2.forEach((amb) => {
+	// 		if (
+	// 			espaciosLibresFloor1.inicial >= amb.ancho &&
+	// 			CLASSROOM_HEIGHT >= amb.alto
+	// 		) {
+	// 			ambientesInicialLibre.push(amb);
+	// 			espaciosLibresFloor1.inicial -= amb.ancho;
+	// 		} else if (
+	// 			espaciosLibresFloor1.primaria >= amb.alto &&
+	// 			CLASSROOM_WIDTH >= amb.ancho
+	// 		) {
+	// 			ambientesPrimariaLibre.push(amb);
+	// 			espaciosLibresFloor1.primaria -= amb.alto;
+	// 		} else if (
+	// 			espaciosLibresFloor1.secundaria >= amb.alto &&
+	// 			CLASSROOM_WIDTH >= amb.ancho
+	// 		) {
+	// 			ambientesSecundariaLibre.push(amb);
+	// 			espaciosLibresFloor1.secundaria -= amb.alto;
+	// 		} else {
+	// 			ambientesRestantes.push(amb);
+	// 		}
+	// 	});
+
+	// 	const superioresFloor2Final = ambientesRestantes;
+
+	// 	// Calcular cuadrante interior
+	// 	const cuadranteInterior = {
+	// 		x: CLASSROOM_WIDTH + CIRCULACION_LATERAL,
+	// 		y: CLASSROOM_HEIGHT + CIRCULACION_ENTRE_PABELLONES,
+	// 		width:
+	// 			maxRectangle.width -
+	// 			CLASSROOM_WIDTH * 2 -
+	// 			CIRCULACION_LATERAL * 2,
+	// 		height:
+	// 			maxRectangle.height -
+	// 			CLASSROOM_HEIGHT * 2 -
+	// 			CIRCULACION_ENTRE_PABELLONES * 2,
+	// 	};
+
+	// 	const distribucionCuadrante = distribuirEnCuadranteInterior(
+	// 		cuadranteInterior,
+	// 		lateralesCancha
+	// 	);
+
+	// 	const needsSecondFloor =
+	// 		inicialFloor2 +
+	// 			primariaFloor2 +
+	// 			secundariaFloor2 +
+	// 			superioresFloor2Final.length >
+	// 		0;
+	// 	const floors = needsSecondFloor ? 2 : 1;
+
+	// 	setTotalFloors(floors);
+
+	// 	setDistribution({
+	// 		floors: {
+	// 			1: {
+	// 				inicial: inicialFloor1,
+	// 				primaria: primariaFloor1,
+	// 				secundaria: secundariaFloor1,
+	// 				inicialBanoPos: POSICION_ESCALERA,
+	// 				primariaBanoPos: POSICION_ESCALERA,
+	// 				secundariaBanoPos: POSICION_ESCALERA,
+	// 				ambientesSuperiores: superioresFloor1,
+	// 				ambientesInicialLibre: ambientesInicialLibre,
+	// 				ambientesPrimariaLibre: ambientesPrimariaLibre,
+	// 				ambientesSecundariaLibre: ambientesSecundariaLibre,
+	// 				cuadranteInterior: cuadranteInterior,
+	// 				distribucionCuadrante: distribucionCuadrante,
+	// 			},
+	// 			2: {
+	// 				inicial: inicialFloor2,
+	// 				primaria: primariaFloor2,
+	// 				secundaria: secundariaFloor2,
+	// 				inicialBanoPos: POSICION_ESCALERA,
+	// 				primariaBanoPos: POSICION_ESCALERA,
+	// 				secundariaBanoPos: POSICION_ESCALERA,
+	// 				ambientesSuperiores: superioresFloor2Final,
+	// 				ambientesInicialLibre: [],
+	// 				ambientesPrimariaLibre: [],
+	// 				ambientesSecundariaLibre: [],
+	// 				tieneBanos: false,
+	// 			},
+	// 		},
+	// 		totalFloors: floors,
+	// 		ambientesEnPabellones: enPabellones,
+	// 		ambientesLateralesCancha: lateralesCancha,
+	// 		pabellonInferiorEs: usarPabellonInferiorPara,
+	// 		layoutMode: "horizontal", // ✅ IMPORTANTE: Guardar el modo
+	// 	});
+	// };
 
 	const calculateHorizontalDistribution = (
 		inicialTotal,
@@ -3710,6 +3312,27 @@ EOF
 			.filter((a) => a.pabellon === "inicial")
 			.reduce((sum, amb) => sum + amb.ancho, 0);
 
+		// ✅ DETECTAR SI HAY UN NIVEL VACÍO
+		const hayPrimaria = primariaTotal > 0;
+		const haySecundaria = secundariaTotal > 0;
+		const pabellonVacio = !hayPrimaria
+			? "primaria"
+			: !haySecundaria
+			? "secundaria"
+			: null;
+
+		console.log("🔍 Análisis inicial:", {
+			inicialTotal,
+			primariaTotal,
+			secundariaTotal,
+			pabellonVacio,
+			capacidades: {
+				inicial: currentCapacity.inicial.max,
+				primaria: currentCapacity.primaria.max,
+				secundaria: currentCapacity.secundaria.max,
+			},
+		});
+
 		// LÓGICA: Si no hay inicial, usar ese pabellón para el nivel con más aulas
 		let usarPabellonInferiorPara = "inicial";
 		let aulasEnPabellonInferior = inicialTotal;
@@ -3730,6 +3353,161 @@ EOF
 			}
 		}
 
+		// ✅ CALCULAR CUADRANTE INTERIOR PRIMERO
+		const cuadranteInterior = {
+			x: CLASSROOM_WIDTH + CIRCULACION_LATERAL,
+			y: CLASSROOM_HEIGHT + CIRCULACION_ENTRE_PABELLONES,
+			width:
+				maxRectangle.width -
+				CLASSROOM_WIDTH * 2 -
+				CIRCULACION_LATERAL * 2,
+			height:
+				maxRectangle.height -
+				CLASSROOM_HEIGHT * 2 -
+				CIRCULACION_ENTRE_PABELLONES * 2,
+		};
+
+		const distribucionCuadrante = distribuirEnCuadranteInterior(
+			cuadranteInterior,
+			lateralesCancha
+		);
+
+		// ✅ DETECTAR AMBIENTES QUE NO CABIERON EN EL CUADRANTE INTERIOR
+		const ambientesQueNoCaben = lateralesCancha.filter((amb) => {
+			const cabeEnBottom = distribucionCuadrante.ambientesBottom.some(
+				(a) => a.nombre === amb.nombre
+			);
+			const cabeEnTop = distribucionCuadrante.ambientesTop.some(
+				(a) => a.nombre === amb.nombre
+			);
+			const cabeEnLeft = distribucionCuadrante.ambientesLeft.some(
+				(a) => a.nombre === amb.nombre
+			);
+			const cabeEnRight = distribucionCuadrante.ambientesRight.some(
+				(a) => a.nombre === amb.nombre
+			);
+
+			return !cabeEnBottom && !cabeEnTop && !cabeEnLeft && !cabeEnRight;
+		});
+
+		console.log(
+			"📦 Ambientes que NO caben en cuadrante:",
+			ambientesQueNoCaben.map((a) => a.nombre)
+		);
+
+		// ✅ VARIABLES PARA OPTIMIZACIÓN
+		let ambientesReubicadosPrimaria = [];
+		let ambientesReubicadosSecundaria = [];
+		let aulasAdicionalesPrimariaEnSecundaria = 0; // Aulas de primaria que van al pabellón de secundaria
+		let aulasAdicionalesSecundariaEnPrimaria = 0; // Aulas de secundaria que van al pabellón de primaria
+
+		// ✅ OPTIMIZACIÓN: REUBICAR AMBIENTES O AGREGAR AULAS
+		if (pabellonVacio && ambientesQueNoCaben.length > 0) {
+			// ✅ CASO 1: HAY AMBIENTES QUE REUBICAR
+			console.log(
+				`🔄 Reubicando ${ambientesQueNoCaben.length} ambientes al pabellón ${pabellonVacio}`
+			);
+
+			const espacioVerticalTotal =
+				maxRectangle.height -
+				CLASSROOM_HEIGHT -
+				CIRCULACION_ENTRE_PABELLONES -
+				CIRCULACION_LATERAL * 2;
+
+			let posicionVertical = 0; // Empezamos desde 0 relativo al pabellón
+
+			ambientesQueNoCaben.forEach((ambiente) => {
+				if (posicionVertical + ambiente.alto <= espacioVerticalTotal) {
+					if (pabellonVacio === "primaria") {
+						ambientesReubicadosPrimaria.push({
+							...ambiente,
+							posicionVertical,
+						});
+					} else {
+						ambientesReubicadosSecundaria.push({
+							...ambiente,
+							posicionVertical,
+						});
+					}
+					console.log(
+						`  ✅ ${ambiente.nombre} reubicado (${ambiente.ancho}x${
+							ambiente.alto
+						}) en posición Y: ${posicionVertical.toFixed(1)}`
+					);
+					posicionVertical += ambiente.alto;
+				} else {
+					console.warn(
+						`  ⚠️ ${
+							ambiente.nombre
+						} NO CABE en pabellón vacío (necesita ${
+							ambiente.alto
+						}, disponible ${(
+							espacioVerticalTotal - posicionVertical
+						).toFixed(1)})`
+					);
+				}
+			});
+		} else if (pabellonVacio && ambientesQueNoCaben.length === 0) {
+			// ✅ CASO 2: NO HAY AMBIENTES QUE REUBICAR, CALCULAR AULAS ADICIONALES
+			console.log(
+				`📐 Calculando aulas adicionales para pabellón ${pabellonVacio}`
+			);
+
+			const espacioVerticalTotal =
+				maxRectangle.height -
+				CLASSROOM_HEIGHT -
+				CIRCULACION_ENTRE_PABELLONES -
+				CIRCULACION_LATERAL * 2;
+
+			// Restar espacio para ambientes del pabellón si existen
+			let espacioOcupadoAmbientes = 0;
+			if (pabellonVacio === "primaria") {
+				espacioOcupadoAmbientes = ambientesPrimariaTotal;
+			} else {
+				espacioOcupadoAmbientes = ambientesSecundariaTotal;
+			}
+
+			const espacioParaAulas =
+				espacioVerticalTotal - espacioOcupadoAmbientes;
+			const aulasQueCaben = Math.floor(
+				espacioParaAulas / CLASSROOM_HEIGHT
+			);
+
+			if (pabellonVacio === "primaria") {
+				// Secundaria existe y quiere usar el pabellón vacío de primaria
+				const secundariaEnSuPabellon = Math.min(
+					secundariaTotal,
+					currentCapacity.secundaria.max
+				);
+				const secundariaSinDistribuir =
+					secundariaTotal - secundariaEnSuPabellon;
+
+				aulasAdicionalesSecundariaEnPrimaria = Math.min(
+					aulasQueCaben,
+					secundariaSinDistribuir
+				);
+				console.log(
+					`  📊 Secundaria: ${secundariaEnSuPabellon} en su pabellón + ${aulasAdicionalesSecundariaEnPrimaria} en pabellón primaria vacío`
+				);
+			} else {
+				// Primaria existe y quiere usar el pabellón vacío de secundaria
+				const primariaEnSuPabellon = Math.min(
+					primariaTotal,
+					currentCapacity.primaria.max
+				);
+				const primariaSinDistribuir =
+					primariaTotal - primariaEnSuPabellon;
+
+				aulasAdicionalesPrimariaEnSecundaria = Math.min(
+					aulasQueCaben,
+					primariaSinDistribuir
+				);
+				console.log(
+					`  📊 Primaria: ${primariaEnSuPabellon} en su pabellón + ${aulasAdicionalesPrimariaEnSecundaria} en pabellón secundaria vacío`
+				);
+			}
+		}
+
 		// Calcular distribución según el caso
 		let inicialFloor1 = 0,
 			inicialFloor2 = 0;
@@ -3737,55 +3515,116 @@ EOF
 			primariaFloor2 = 0;
 		let secundariaFloor1 = 0,
 			secundariaFloor2 = 0;
+		let primariaEnPabellonSecundaria = 0; // Nuevas aulas de primaria en pabellón secundaria
+		let secundariaEnPabellonPrimaria = 0; // Nuevas aulas de secundaria en pabellón primaria
 
 		if (usarPabellonInferiorPara === "inicial") {
 			inicialFloor1 = Math.min(inicialTotal, currentCapacity.inicial.max);
 			inicialFloor2 = inicialTotal - inicialFloor1;
+
+			// ✅ PRIMARIA: respetar su capacidad en su propio pabellón
 			primariaFloor1 = Math.min(
 				primariaTotal,
 				currentCapacity.primaria.max
 			);
-			primariaFloor2 = primariaTotal - primariaFloor1;
+			const primariaRestante = primariaTotal - primariaFloor1;
+
+			// Las aulas adicionales van al pabellón de secundaria
+			primariaEnPabellonSecundaria = Math.min(
+				primariaRestante,
+				aulasAdicionalesPrimariaEnSecundaria
+			);
+			primariaFloor2 = primariaRestante - primariaEnPabellonSecundaria;
+
+			// ✅ SECUNDARIA: respetar su capacidad en su propio pabellón
 			secundariaFloor1 = Math.min(
 				secundariaTotal,
 				currentCapacity.secundaria.max
 			);
-			secundariaFloor2 = secundariaTotal - secundariaFloor1;
+			const secundariaRestante = secundariaTotal - secundariaFloor1;
+
+			// Las aulas adicionales van al pabellón de primaria
+			secundariaEnPabellonPrimaria = Math.min(
+				secundariaRestante,
+				aulasAdicionalesSecundariaEnPrimaria
+			);
+			secundariaFloor2 =
+				secundariaRestante - secundariaEnPabellonPrimaria;
 		} else if (usarPabellonInferiorPara === "primaria") {
 			const primariaEnInferior = Math.min(
 				primariaTotal,
 				currentCapacity.inicial.max
 			);
 			const primariaRestante = primariaTotal - primariaEnInferior;
+
 			inicialFloor1 = primariaEnInferior;
+
 			primariaFloor1 = Math.min(
 				primariaRestante,
 				currentCapacity.primaria.max
 			);
-			primariaFloor2 = primariaRestante - primariaFloor1;
+			const primariaMasRestante = primariaRestante - primariaFloor1;
+
+			primariaEnPabellonSecundaria = Math.min(
+				primariaMasRestante,
+				aulasAdicionalesPrimariaEnSecundaria
+			);
+			primariaFloor2 = primariaMasRestante - primariaEnPabellonSecundaria;
+
 			secundariaFloor1 = Math.min(
 				secundariaTotal,
 				currentCapacity.secundaria.max
 			);
-			secundariaFloor2 = secundariaTotal - secundariaFloor1;
+			const secundariaRestante = secundariaTotal - secundariaFloor1;
+
+			secundariaEnPabellonPrimaria = Math.min(
+				secundariaRestante,
+				aulasAdicionalesSecundariaEnPrimaria
+			);
+			secundariaFloor2 =
+				secundariaRestante - secundariaEnPabellonPrimaria;
 		} else if (usarPabellonInferiorPara === "secundaria") {
 			const secundariaEnInferior = Math.min(
 				secundariaTotal,
 				currentCapacity.inicial.max
 			);
 			const secundariaRestante = secundariaTotal - secundariaEnInferior;
+
 			inicialFloor1 = secundariaEnInferior;
+
 			secundariaFloor1 = Math.min(
 				secundariaRestante,
 				currentCapacity.secundaria.max
 			);
-			secundariaFloor2 = secundariaRestante - secundariaFloor1;
+			const secundariaMasRestante = secundariaRestante - secundariaFloor1;
+
+			secundariaEnPabellonPrimaria = Math.min(
+				secundariaMasRestante,
+				aulasAdicionalesSecundariaEnPrimaria
+			);
+			secundariaFloor2 =
+				secundariaMasRestante - secundariaEnPabellonPrimaria;
+
 			primariaFloor1 = Math.min(
 				primariaTotal,
 				currentCapacity.primaria.max
 			);
-			primariaFloor2 = primariaTotal - primariaFloor1;
+			const primariaRestante = primariaTotal - primariaFloor1;
+
+			primariaEnPabellonSecundaria = Math.min(
+				primariaRestante,
+				aulasAdicionalesPrimariaEnSecundaria
+			);
+			primariaFloor2 = primariaRestante - primariaEnPabellonSecundaria;
 		}
+
+		console.log("📊 Distribución final de aulas:", {
+			inicial: `Piso1: ${inicialFloor1}, Piso2: ${inicialFloor2} | Total: ${inicialTotal}`,
+			primaria: `SuPabellón: ${primariaFloor1}, PabellónSecundaria: ${primariaEnPabellonSecundaria}, Piso2: ${primariaFloor2} | Total: ${primariaTotal}`,
+			secundaria: `SuPabellón: ${secundariaFloor1}, PabellónPrimaria: ${secundariaEnPabellonPrimaria}, Piso2: ${secundariaFloor2} | Total: ${secundariaTotal}`,
+			ambientesReubicadosPrimaria: ambientesReubicadosPrimaria.length,
+			ambientesReubicadosSecundaria: ambientesReubicadosSecundaria.length,
+		});
 
 		const POSICION_ESCALERA = 1;
 
@@ -3826,18 +3665,30 @@ EOF
 				maxRectangle.height -
 					CLASSROOM_HEIGHT -
 					CIRCULACION_ENTRE_PABELLONES -
+					CIRCULACION_LATERAL * 2 -
 					primariaFloor1 * CLASSROOM_HEIGHT -
 					(primariaFloor1 > 0 ? BANO_HEIGHT + ESCALERA_HEIGHT : 0) -
-					ambientesPrimariaTotal
+					ambientesPrimariaTotal -
+					ambientesReubicadosPrimaria.reduce(
+						(sum, a) => sum + a.alto,
+						0
+					) -
+					secundariaEnPabellonPrimaria * CLASSROOM_HEIGHT
 			),
 			secundaria: Math.max(
 				0,
 				maxRectangle.height -
 					CLASSROOM_HEIGHT -
 					CIRCULACION_ENTRE_PABELLONES -
+					CIRCULACION_LATERAL * 2 -
 					secundariaFloor1 * CLASSROOM_HEIGHT -
 					(secundariaFloor1 > 0 ? BANO_HEIGHT + ESCALERA_HEIGHT : 0) -
-					ambientesSecundariaTotal
+					ambientesSecundariaTotal -
+					ambientesReubicadosSecundaria.reduce(
+						(sum, a) => sum + a.alto,
+						0
+					) -
+					primariaEnPabellonSecundaria * CLASSROOM_HEIGHT
 			),
 		};
 
@@ -3869,7 +3720,376 @@ EOF
 
 		const superioresFloor2Final = ambientesRestantes;
 
-		// Calcular cuadrante interior
+		const needsSecondFloor =
+			inicialFloor2 +
+				primariaFloor2 +
+				secundariaFloor2 +
+				superioresFloor2Final.length >
+			0;
+		const floors = needsSecondFloor ? 2 : 1;
+
+		setTotalFloors(floors);
+
+		setDistribution({
+			floors: {
+				1: {
+					inicial: inicialFloor1,
+					primaria: primariaFloor1,
+					secundaria: secundariaFloor1,
+					primariaEnPabellonSecundaria: primariaEnPabellonSecundaria,
+					secundariaEnPabellonPrimaria: secundariaEnPabellonPrimaria,
+					inicialBanoPos: POSICION_ESCALERA,
+					primariaBanoPos: POSICION_ESCALERA,
+					secundariaBanoPos: POSICION_ESCALERA,
+					ambientesSuperiores: superioresFloor1,
+					ambientesInicialLibre: ambientesInicialLibre,
+					ambientesPrimariaLibre: ambientesPrimariaLibre,
+					ambientesSecundariaLibre: ambientesSecundariaLibre,
+					ambientesReubicadosPrimaria: ambientesReubicadosPrimaria,
+					ambientesReubicadosSecundaria:
+						ambientesReubicadosSecundaria,
+					cuadranteInterior: cuadranteInterior,
+					distribucionCuadrante: distribucionCuadrante,
+				},
+				2: {
+					inicial: inicialFloor2,
+					primaria: primariaFloor2,
+					secundaria: secundariaFloor2,
+					primariaEnPabellonSecundaria: 0,
+					secundariaEnPabellonPrimaria: 0,
+					inicialBanoPos: POSICION_ESCALERA,
+					primariaBanoPos: POSICION_ESCALERA,
+					secundariaBanoPos: POSICION_ESCALERA,
+					ambientesSuperiores: superioresFloor2Final,
+					ambientesInicialLibre: [],
+					ambientesPrimariaLibre: [],
+					ambientesSecundariaLibre: [],
+					ambientesReubicadosPrimaria: [],
+					ambientesReubicadosSecundaria: [],
+					tieneBanos: false,
+				},
+			},
+			totalFloors: floors,
+			ambientesEnPabellones: enPabellones,
+			ambientesLateralesCancha: lateralesCancha,
+			pabellonInferiorEs: usarPabellonInferiorPara,
+			layoutMode: "horizontal",
+		});
+	};
+
+	// const calculateVerticalDistribution = (
+	// 	inicialTotal,
+	// 	primariaTotal,
+	// 	secundariaTotal,
+	// 	enPabellones,
+	// 	lateralesCancha,
+	// 	superiores,
+	// 	currentCapacity
+	// ) => {
+	// 	console.log("Capacidades disponibles:", capacityInfo);
+
+	// 	// ✅ LÓGICA: Si no hay inicial, usar ese pabellón para el nivel con más aulas
+	// 	let usarPabellonIzquierdaPara = "inicial"; // Por defecto
+
+	// 	if (inicialTotal === 0) {
+	// 		// Decidir qué nivel usa el pabellón izquierdo (vertical)
+	// 		if (primariaTotal > secundariaTotal) {
+	// 			usarPabellonIzquierdaPara = "primaria";
+	// 		} else if (secundariaTotal > 0) {
+	// 			usarPabellonIzquierdaPara = "secundaria";
+	// 		}
+	// 	}
+
+	// 	// Calcular distribución según el caso
+	// 	let inicialFloor1 = 0,
+	// 		inicialFloor2 = 0;
+	// 	let primariaFloor1 = 0,
+	// 		primariaFloor2 = 0;
+	// 	let secundariaFloor1 = 0,
+	// 		secundariaFloor2 = 0;
+
+	// 	if (usarPabellonIzquierdaPara === "inicial") {
+	// 		// Caso normal: hay aulas de inicial
+	// 		inicialFloor1 = Math.min(inicialTotal, currentCapacity.inicial.max);
+	// 		inicialFloor2 = inicialTotal - inicialFloor1;
+
+	// 		primariaFloor1 = Math.min(
+	// 			primariaTotal,
+	// 			currentCapacity.primaria.max
+	// 		);
+	// 		primariaFloor2 = primariaTotal - primariaFloor1;
+
+	// 		secundariaFloor1 = Math.min(
+	// 			secundariaTotal,
+	// 			currentCapacity.secundaria.max
+	// 		);
+	// 		secundariaFloor2 = secundariaTotal - secundariaFloor1;
+	// 	} else if (usarPabellonIzquierdaPara === "primaria") {
+	// 		// No hay inicial, primaria usa el pabellón izquierdo (vertical)
+	// 		const primariaEnIzquierda = Math.min(
+	// 			primariaTotal,
+	// 			currentCapacity.inicial.max
+	// 		);
+	// 		const primariaRestante = primariaTotal - primariaEnIzquierda;
+
+	// 		inicialFloor1 = primariaEnIzquierda; // Se dibuja en zona inicial pero son aulas de primaria
+	// 		primariaFloor1 = Math.min(
+	// 			primariaRestante,
+	// 			currentCapacity.primaria.max
+	// 		);
+	// 		primariaFloor2 = primariaRestante - primariaFloor1;
+
+	// 		secundariaFloor1 = Math.min(
+	// 			secundariaTotal,
+	// 			currentCapacity.secundaria.max
+	// 		);
+	// 		secundariaFloor2 = secundariaTotal - secundariaFloor1;
+	// 	} else if (usarPabellonIzquierdaPara === "secundaria") {
+	// 		// No hay inicial, secundaria usa el pabellón izquierdo (vertical)
+	// 		const secundariaEnIzquierda = Math.min(
+	// 			secundariaTotal,
+	// 			currentCapacity.inicial.max
+	// 		);
+	// 		const secundariaRestante = secundariaTotal - secundariaEnIzquierda;
+
+	// 		inicialFloor1 = secundariaEnIzquierda; // Se dibuja en zona inicial pero son aulas de secundaria
+	// 		secundariaFloor1 = Math.min(
+	// 			secundariaRestante,
+	// 			currentCapacity.secundaria.max
+	// 		);
+	// 		secundariaFloor2 = secundariaRestante - secundariaFloor1;
+
+	// 		primariaFloor1 = Math.min(
+	// 			primariaTotal,
+	// 			currentCapacity.primaria.max
+	// 		);
+	// 		primariaFloor2 = primariaTotal - primariaFloor1;
+	// 	}
+
+	// 	const POSICION_ESCALERA = 1;
+
+	// 	// Distribuir ambientes superiores (derecha, vertical)
+	// 	const superioresFloor1 = [];
+	// 	const superioresFloor2 = [];
+	// 	const ambientesInicialLibre = [];
+	// 	const ambientesPrimariaLibre = [];
+	// 	const ambientesSecundariaLibre = [];
+
+	// 	const altoDisponibleDerecha =
+	// 		maxRectangle.height -
+	// 		CLASSROOM_HEIGHT * 2 -
+	// 		CIRCULACION_ENTRE_PABELLONES * 2;
+	// 	let altoAcumuladoFloor1 = 0;
+
+	// 	superiores.forEach((amb) => {
+	// 		if (altoAcumuladoFloor1 + amb.alto <= altoDisponibleDerecha) {
+	// 			superioresFloor1.push(amb);
+	// 			altoAcumuladoFloor1 += amb.alto;
+	// 		} else {
+	// 			superioresFloor2.push(amb);
+	// 		}
+	// 	});
+
+	// 	// Calcular espacios libres
+	// 	const ambientesPrimariaTotal = enPabellones
+	// 		.filter((a) => a.pabellon === "primaria")
+	// 		.reduce((sum, amb) => sum + amb.ancho, 0);
+
+	// 	const ambientesSecundariaTotal = enPabellones
+	// 		.filter((a) => a.pabellon === "secundaria")
+	// 		.reduce((sum, amb) => sum + amb.ancho, 0);
+
+	// 	const ambientesInicialTotal = enPabellones
+	// 		.filter((a) => a.pabellon === "inicial")
+	// 		.reduce((sum, amb) => sum + amb.alto, 0);
+
+	// 	const espaciosLibresFloor1 = {
+	// 		inicial: Math.max(
+	// 			0,
+	// 			maxRectangle.height -
+	// 				CLASSROOM_HEIGHT * 2 -
+	// 				CIRCULACION_ENTRE_PABELLONES * 2 -
+	// 				inicialFloor1 * CLASSROOM_HEIGHT -
+	// 				(inicialFloor1 > 0 ? BANO_HEIGHT + ESCALERA_HEIGHT : 0) -
+	// 				ambientesInicialTotal
+	// 		),
+	// 		primaria: Math.max(
+	// 			0,
+	// 			maxRectangle.width -
+	// 				CIRCULACION_LATERAL * 2 -
+	// 				primariaFloor1 * CLASSROOM_WIDTH -
+	// 				(primariaFloor1 > 0 ? BANO_WIDTH + ESCALERA_WIDTH : 0) -
+	// 				ambientesPrimariaTotal
+	// 		),
+	// 		secundaria: Math.max(
+	// 			0,
+	// 			maxRectangle.width -
+	// 				CIRCULACION_LATERAL * 2 -
+	// 				secundariaFloor1 * CLASSROOM_WIDTH -
+	// 				(secundariaFloor1 > 0 ? BANO_WIDTH + ESCALERA_WIDTH : 0) -
+	// 				ambientesSecundariaTotal
+	// 		),
+	// 	};
+
+	// 	// Intentar colocar ambientes sobrantes
+	// 	const ambientesRestantes = [];
+	// 	superioresFloor2.forEach((amb) => {
+	// 		if (
+	// 			espaciosLibresFloor1.inicial >= amb.alto &&
+	// 			CLASSROOM_WIDTH >= amb.ancho
+	// 		) {
+	// 			ambientesInicialLibre.push(amb);
+	// 			espaciosLibresFloor1.inicial -= amb.alto;
+	// 		} else if (
+	// 			espaciosLibresFloor1.primaria >= amb.ancho &&
+	// 			CLASSROOM_HEIGHT >= amb.alto
+	// 		) {
+	// 			ambientesPrimariaLibre.push(amb);
+	// 			espaciosLibresFloor1.primaria -= amb.ancho;
+	// 		} else if (
+	// 			espaciosLibresFloor1.secundaria >= amb.ancho &&
+	// 			CLASSROOM_HEIGHT >= amb.alto
+	// 		) {
+	// 			ambientesSecundariaLibre.push(amb);
+	// 			espaciosLibresFloor1.secundaria -= amb.ancho;
+	// 		} else {
+	// 			ambientesRestantes.push(amb);
+	// 		}
+	// 	});
+
+	// 	const superioresFloor2Final = ambientesRestantes;
+
+	// 	// Cuadrante interior
+	// 	const cuadranteInterior = {
+	// 		x: CLASSROOM_WIDTH + CIRCULACION_LATERAL,
+	// 		y: CLASSROOM_HEIGHT + CIRCULACION_ENTRE_PABELLONES,
+	// 		width:
+	// 			maxRectangle.width -
+	// 			CLASSROOM_WIDTH * 2 -
+	// 			CIRCULACION_LATERAL * 2,
+	// 		height:
+	// 			maxRectangle.height -
+	// 			CLASSROOM_HEIGHT * 2 -
+	// 			CIRCULACION_ENTRE_PABELLONES * 2,
+	// 	};
+
+	// 	const distribucionCuadrante = distribuirEnCuadranteInterior(
+	// 		cuadranteInterior,
+	// 		lateralesCancha
+	// 	);
+
+	// 	const needsSecondFloor =
+	// 		inicialFloor2 +
+	// 			primariaFloor2 +
+	// 			secundariaFloor2 +
+	// 			superioresFloor2Final.length >
+	// 		0;
+	// 	const floors = needsSecondFloor ? 2 : 1;
+
+	// 	setTotalFloors(floors);
+
+	// 	console.log("Distribución vertical calculada:", {
+	// 		usandoPabellonIzquierdoPara: usarPabellonIzquierdaPara,
+	// 		inicial: `${inicialFloor1} + ${inicialFloor2} = ${inicialTotal}`,
+	// 		primaria: `${primariaFloor1} + ${primariaFloor2} = ${primariaTotal}`,
+	// 		secundaria: `${secundariaFloor1} + ${secundariaFloor2} = ${secundariaTotal}`,
+	// 	});
+
+	// 	setDistribution({
+	// 		floors: {
+	// 			1: {
+	// 				inicial: inicialFloor1,
+	// 				primaria: primariaFloor1,
+	// 				secundaria: secundariaFloor1,
+	// 				inicialBanoPos: POSICION_ESCALERA,
+	// 				primariaBanoPos: POSICION_ESCALERA,
+	// 				secundariaBanoPos: POSICION_ESCALERA,
+	// 				ambientesSuperiores: superioresFloor1,
+	// 				ambientesInicialLibre: ambientesInicialLibre,
+	// 				ambientesPrimariaLibre: ambientesPrimariaLibre,
+	// 				ambientesSecundariaLibre: ambientesSecundariaLibre,
+	// 				cuadranteInterior: cuadranteInterior,
+	// 				distribucionCuadrante: distribucionCuadrante,
+	// 			},
+	// 			2: {
+	// 				inicial: inicialFloor2,
+	// 				primaria: primariaFloor2,
+	// 				secundaria: secundariaFloor2,
+	// 				inicialBanoPos: POSICION_ESCALERA,
+	// 				primariaBanoPos: POSICION_ESCALERA,
+	// 				secundariaBanoPos: POSICION_ESCALERA,
+	// 				ambientesSuperiores: superioresFloor2Final,
+	// 				ambientesInicialLibre: [],
+	// 				ambientesPrimariaLibre: [],
+	// 				ambientesSecundariaLibre: [],
+	// 				tieneBanos: false,
+	// 			},
+	// 		},
+	// 		totalFloors: floors,
+	// 		ambientesEnPabellones: enPabellones,
+	// 		ambientesLateralesCancha: lateralesCancha,
+	// 		pabellonInferiorEs: usarPabellonIzquierdaPara, // ✅ CAMBIADO: ahora refleja qué nivel usa el pabellón izquierdo
+	// 		layoutMode: "vertical",
+	// 	});
+	// };
+	const calculateVerticalDistribution = (
+		inicialTotal,
+		primariaTotal,
+		secundariaTotal,
+		enPabellones,
+		lateralesCancha,
+		superiores,
+		currentCapacity
+	) => {
+		console.log("Capacidades disponibles:", capacityInfo);
+
+		// ✅ CALCULAR ESPACIO TOTAL DE AMBIENTES
+		const ambientesPrimariaTotal = enPabellones
+			.filter((a) => a.pabellon === "primaria")
+			.reduce((sum, amb) => sum + amb.ancho, 0);
+
+		const ambientesSecundariaTotal = enPabellones
+			.filter((a) => a.pabellon === "secundaria")
+			.reduce((sum, amb) => sum + amb.ancho, 0);
+
+		const ambientesInicialTotal = enPabellones
+			.filter((a) => a.pabellon === "inicial")
+			.reduce((sum, amb) => sum + amb.alto, 0);
+
+		// ✅ DETECTAR SI HAY UN NIVEL VACÍO
+		const hayPrimaria = primariaTotal > 0;
+		const haySecundaria = secundariaTotal > 0;
+		const pabellonVacio = !hayPrimaria
+			? "primaria"
+			: !haySecundaria
+			? "secundaria"
+			: null;
+
+		console.log("🔍 Análisis inicial (VERTICAL):", {
+			inicialTotal,
+			primariaTotal,
+			secundariaTotal,
+			pabellonVacio,
+			capacidades: {
+				inicial: currentCapacity.inicial.max,
+				primaria: currentCapacity.primaria.max,
+				secundaria: currentCapacity.secundaria.max,
+			},
+		});
+
+		// ✅ LÓGICA: Si no hay inicial, usar ese pabellón para el nivel con más aulas
+		let usarPabellonIzquierdaPara = "inicial"; // Por defecto
+
+		if (inicialTotal === 0) {
+			// Decidir qué nivel usa el pabellón izquierdo (vertical)
+			if (primariaTotal > secundariaTotal) {
+				usarPabellonIzquierdaPara = "primaria";
+			} else if (secundariaTotal > 0) {
+				usarPabellonIzquierdaPara = "secundaria";
+			}
+		}
+
+		// ✅ CALCULAR CUADRANTE INTERIOR PRIMERO
 		const cuadranteInterior = {
 			x: CLASSROOM_WIDTH + CIRCULACION_LATERAL,
 			y: CLASSROOM_HEIGHT + CIRCULACION_ENTRE_PABELLONES,
@@ -3888,74 +4108,138 @@ EOF
 			lateralesCancha
 		);
 
-		const needsSecondFloor =
-			inicialFloor2 +
-				primariaFloor2 +
-				secundariaFloor2 +
-				superioresFloor2Final.length >
-			0;
-		const floors = needsSecondFloor ? 2 : 1;
+		// ✅ DETECTAR AMBIENTES QUE NO CABIERON EN EL CUADRANTE INTERIOR
+		const ambientesQueNoCaben = lateralesCancha.filter((amb) => {
+			const cabeEnBottom = distribucionCuadrante.ambientesBottom.some(
+				(a) => a.nombre === amb.nombre
+			);
+			const cabeEnTop = distribucionCuadrante.ambientesTop.some(
+				(a) => a.nombre === amb.nombre
+			);
+			const cabeEnLeft = distribucionCuadrante.ambientesLeft.some(
+				(a) => a.nombre === amb.nombre
+			);
+			const cabeEnRight = distribucionCuadrante.ambientesRight.some(
+				(a) => a.nombre === amb.nombre
+			);
 
-		setTotalFloors(floors);
-
-		setDistribution({
-			floors: {
-				1: {
-					inicial: inicialFloor1,
-					primaria: primariaFloor1,
-					secundaria: secundariaFloor1,
-					inicialBanoPos: POSICION_ESCALERA,
-					primariaBanoPos: POSICION_ESCALERA,
-					secundariaBanoPos: POSICION_ESCALERA,
-					ambientesSuperiores: superioresFloor1,
-					ambientesInicialLibre: ambientesInicialLibre,
-					ambientesPrimariaLibre: ambientesPrimariaLibre,
-					ambientesSecundariaLibre: ambientesSecundariaLibre,
-					cuadranteInterior: cuadranteInterior,
-					distribucionCuadrante: distribucionCuadrante,
-				},
-				2: {
-					inicial: inicialFloor2,
-					primaria: primariaFloor2,
-					secundaria: secundariaFloor2,
-					inicialBanoPos: POSICION_ESCALERA,
-					primariaBanoPos: POSICION_ESCALERA,
-					secundariaBanoPos: POSICION_ESCALERA,
-					ambientesSuperiores: superioresFloor2Final,
-					ambientesInicialLibre: [],
-					ambientesPrimariaLibre: [],
-					ambientesSecundariaLibre: [],
-					tieneBanos: false,
-				},
-			},
-			totalFloors: floors,
-			ambientesEnPabellones: enPabellones,
-			ambientesLateralesCancha: lateralesCancha,
-			pabellonInferiorEs: usarPabellonInferiorPara,
-			layoutMode: "horizontal", // ✅ IMPORTANTE: Guardar el modo
+			return !cabeEnBottom && !cabeEnTop && !cabeEnLeft && !cabeEnRight;
 		});
-	};
 
-	const calculateVerticalDistribution = (
-		inicialTotal,
-		primariaTotal,
-		secundariaTotal,
-		enPabellones,
-		lateralesCancha,
-		superiores,
-		currentCapacity
-	) => {
-		console.log("Capacidades disponibles:", capacityInfo);
+		console.log(
+			"📦 Ambientes que NO caben en cuadrante:",
+			ambientesQueNoCaben.map((a) => a.nombre)
+		);
 
-		// ✅ LÓGICA: Si no hay inicial, usar ese pabellón para el nivel con más aulas
-		let usarPabellonIzquierdaPara = "inicial"; // Por defecto
+		// ✅ VARIABLES PARA OPTIMIZACIÓN
+		let ambientesReubicadosPrimaria = [];
+		let ambientesReubicadosSecundaria = [];
+		let aulasAdicionalesPrimariaEnSecundaria = 0; // Aulas de primaria que van al pabellón de secundaria
+		let aulasAdicionalesSecundariaEnPrimaria = 0; // Aulas de secundaria que van al pabellón de primaria
 
-		if (inicialTotal === 0) {
-			// Decidir qué nivel usa el pabellón izquierdo (vertical)
-			if (primariaTotal > secundariaTotal) {
-				usarPabellonIzquierdaPara = "primaria";
-			} else if (secundariaTotal > 0) {
-				usarPabellonIzquierdaPara = "secundaria";
+		// ✅ OPTIMIZACIÓN: REUBICAR AMBIENTES O AGREGAR AULAS
+		if (pabellonVacio && ambientesQueNoCaben.length > 0) {
+			// ✅ CASO 1: HAY AMBIENTES QUE REUBICAR
+			console.log(
+				`🔄 Reubicando ${ambientesQueNoCaben.length} ambientes al pabellón ${pabellonVacio}`
+			);
+
+			// En modo VERTICAL, primaria y secundaria son HORIZONTALES
+			const espacioHorizontalTotal =
+				maxRectangle.width - CIRCULACION_LATERAL * 2;
+
+			let posicionHorizontal = 0; // Empezamos desde 0 relativo al pabellón
+
+			ambientesQueNoCaben.forEach((ambiente) => {
+				if (
+					posicionHorizontal + ambiente.ancho <=
+					espacioHorizontalTotal
+				) {
+					if (pabellonVacio === "primaria") {
+						ambientesReubicadosPrimaria.push({
+							...ambiente,
+							posicionHorizontal,
+						});
+					} else {
+						ambientesReubicadosSecundaria.push({
+							...ambiente,
+							posicionHorizontal,
+						});
+					}
+					console.log(
+						`  ✅ ${ambiente.nombre} reubicado (${ambiente.ancho}x${
+							ambiente.alto
+						}) en posición X: ${posicionHorizontal.toFixed(1)}`
+					);
+					posicionHorizontal += ambiente.ancho;
+				} else {
+					console.warn(
+						`  ⚠️ ${
+							ambiente.nombre
+						} NO CABE en pabellón vacío (necesita ${
+							ambiente.ancho
+						}, disponible ${(
+							espacioHorizontalTotal - posicionHorizontal
+						).toFixed(1)})`
+					);
+				}
+			});
+		} else if (pabellonVacio && ambientesQueNoCaben.length === 0) {
+			// ✅ CASO 2: NO HAY AMBIENTES QUE REUBICAR, CALCULAR AULAS ADICIONALES
+			console.log(
+				`📐 Calculando aulas adicionales para pabellón ${pabellonVacio}`
+			);
+
+			// En modo VERTICAL, primaria y secundaria son HORIZONTALES
+			const espacioHorizontalTotal =
+				maxRectangle.width - CIRCULACION_LATERAL * 2;
+
+			// Restar espacio para ambientes del pabellón si existen
+			let espacioOcupadoAmbientes = 0;
+			if (pabellonVacio === "primaria") {
+				espacioOcupadoAmbientes = ambientesPrimariaTotal;
+			} else {
+				espacioOcupadoAmbientes = ambientesSecundariaTotal;
+			}
+
+			const espacioParaAulas =
+				espacioHorizontalTotal - espacioOcupadoAmbientes;
+			const aulasQueCaben = Math.floor(
+				espacioParaAulas / CLASSROOM_WIDTH
+			);
+
+			if (pabellonVacio === "primaria") {
+				// Secundaria existe y quiere usar el pabellón vacío de primaria
+				const secundariaEnSuPabellon = Math.min(
+					secundariaTotal,
+					currentCapacity.secundaria.max
+				);
+				const secundariaSinDistribuir =
+					secundariaTotal - secundariaEnSuPabellon;
+
+				aulasAdicionalesSecundariaEnPrimaria = Math.min(
+					aulasQueCaben,
+					secundariaSinDistribuir
+				);
+				console.log(
+					`  📊 Secundaria: ${secundariaEnSuPabellon} en su pabellón + ${aulasAdicionalesSecundariaEnPrimaria} en pabellón primaria vacío`
+				);
+			} else {
+				// Primaria existe y quiere usar el pabellón vacío de secundaria
+				const primariaEnSuPabellon = Math.min(
+					primariaTotal,
+					currentCapacity.primaria.max
+				);
+				const primariaSinDistribuir =
+					primariaTotal - primariaEnSuPabellon;
+
+				aulasAdicionalesPrimariaEnSecundaria = Math.min(
+					aulasQueCaben,
+					primariaSinDistribuir
+				);
+				console.log(
+					`  📊 Primaria: ${primariaEnSuPabellon} en su pabellón + ${aulasAdicionalesPrimariaEnSecundaria} en pabellón secundaria vacío`
+				);
 			}
 		}
 
@@ -3966,6 +4250,8 @@ EOF
 			primariaFloor2 = 0;
 		let secundariaFloor1 = 0,
 			secundariaFloor2 = 0;
+		let primariaEnPabellonSecundaria = 0;
+		let secundariaEnPabellonPrimaria = 0;
 
 		if (usarPabellonIzquierdaPara === "inicial") {
 			// Caso normal: hay aulas de inicial
@@ -3976,13 +4262,26 @@ EOF
 				primariaTotal,
 				currentCapacity.primaria.max
 			);
-			primariaFloor2 = primariaTotal - primariaFloor1;
+			const primariaRestante = primariaTotal - primariaFloor1;
+
+			primariaEnPabellonSecundaria = Math.min(
+				primariaRestante,
+				aulasAdicionalesPrimariaEnSecundaria
+			);
+			primariaFloor2 = primariaRestante - primariaEnPabellonSecundaria;
 
 			secundariaFloor1 = Math.min(
 				secundariaTotal,
 				currentCapacity.secundaria.max
 			);
-			secundariaFloor2 = secundariaTotal - secundariaFloor1;
+			const secundariaRestante = secundariaTotal - secundariaFloor1;
+
+			secundariaEnPabellonPrimaria = Math.min(
+				secundariaRestante,
+				aulasAdicionalesSecundariaEnPrimaria
+			);
+			secundariaFloor2 =
+				secundariaRestante - secundariaEnPabellonPrimaria;
 		} else if (usarPabellonIzquierdaPara === "primaria") {
 			// No hay inicial, primaria usa el pabellón izquierdo (vertical)
 			const primariaEnIzquierda = Math.min(
@@ -3996,13 +4295,26 @@ EOF
 				primariaRestante,
 				currentCapacity.primaria.max
 			);
-			primariaFloor2 = primariaRestante - primariaFloor1;
+			const primariaMasRestante = primariaRestante - primariaFloor1;
+
+			primariaEnPabellonSecundaria = Math.min(
+				primariaMasRestante,
+				aulasAdicionalesPrimariaEnSecundaria
+			);
+			primariaFloor2 = primariaMasRestante - primariaEnPabellonSecundaria;
 
 			secundariaFloor1 = Math.min(
 				secundariaTotal,
 				currentCapacity.secundaria.max
 			);
-			secundariaFloor2 = secundariaTotal - secundariaFloor1;
+			const secundariaRestante = secundariaTotal - secundariaFloor1;
+
+			secundariaEnPabellonPrimaria = Math.min(
+				secundariaRestante,
+				aulasAdicionalesSecundariaEnPrimaria
+			);
+			secundariaFloor2 =
+				secundariaRestante - secundariaEnPabellonPrimaria;
 		} else if (usarPabellonIzquierdaPara === "secundaria") {
 			// No hay inicial, secundaria usa el pabellón izquierdo (vertical)
 			const secundariaEnIzquierda = Math.min(
@@ -4016,14 +4328,35 @@ EOF
 				secundariaRestante,
 				currentCapacity.secundaria.max
 			);
-			secundariaFloor2 = secundariaRestante - secundariaFloor1;
+			const secundariaMasRestante = secundariaRestante - secundariaFloor1;
+
+			secundariaEnPabellonPrimaria = Math.min(
+				secundariaMasRestante,
+				aulasAdicionalesSecundariaEnPrimaria
+			);
+			secundariaFloor2 =
+				secundariaMasRestante - secundariaEnPabellonPrimaria;
 
 			primariaFloor1 = Math.min(
 				primariaTotal,
 				currentCapacity.primaria.max
 			);
-			primariaFloor2 = primariaTotal - primariaFloor1;
+			const primariaRestante = primariaTotal - primariaFloor1;
+
+			primariaEnPabellonSecundaria = Math.min(
+				primariaRestante,
+				aulasAdicionalesPrimariaEnSecundaria
+			);
+			primariaFloor2 = primariaRestante - primariaEnPabellonSecundaria;
 		}
+
+		console.log("📊 Distribución final de aulas (VERTICAL):", {
+			inicial: `Piso1: ${inicialFloor1}, Piso2: ${inicialFloor2} | Total: ${inicialTotal}`,
+			primaria: `SuPabellón: ${primariaFloor1}, PabellónSecundaria: ${primariaEnPabellonSecundaria}, Piso2: ${primariaFloor2} | Total: ${primariaTotal}`,
+			secundaria: `SuPabellón: ${secundariaFloor1}, PabellónPrimaria: ${secundariaEnPabellonPrimaria}, Piso2: ${secundariaFloor2} | Total: ${secundariaTotal}`,
+			ambientesReubicadosPrimaria: ambientesReubicadosPrimaria.length,
+			ambientesReubicadosSecundaria: ambientesReubicadosSecundaria.length,
+		});
 
 		const POSICION_ESCALERA = 1;
 
@@ -4050,18 +4383,6 @@ EOF
 		});
 
 		// Calcular espacios libres
-		const ambientesPrimariaTotal = enPabellones
-			.filter((a) => a.pabellon === "primaria")
-			.reduce((sum, amb) => sum + amb.ancho, 0);
-
-		const ambientesSecundariaTotal = enPabellones
-			.filter((a) => a.pabellon === "secundaria")
-			.reduce((sum, amb) => sum + amb.ancho, 0);
-
-		const ambientesInicialTotal = enPabellones
-			.filter((a) => a.pabellon === "inicial")
-			.reduce((sum, amb) => sum + amb.alto, 0);
-
 		const espaciosLibresFloor1 = {
 			inicial: Math.max(
 				0,
@@ -4078,7 +4399,12 @@ EOF
 					CIRCULACION_LATERAL * 2 -
 					primariaFloor1 * CLASSROOM_WIDTH -
 					(primariaFloor1 > 0 ? BANO_WIDTH + ESCALERA_WIDTH : 0) -
-					ambientesPrimariaTotal
+					ambientesPrimariaTotal -
+					ambientesReubicadosPrimaria.reduce(
+						(sum, a) => sum + a.ancho,
+						0
+					) -
+					secundariaEnPabellonPrimaria * CLASSROOM_WIDTH
 			),
 			secundaria: Math.max(
 				0,
@@ -4086,7 +4412,12 @@ EOF
 					CIRCULACION_LATERAL * 2 -
 					secundariaFloor1 * CLASSROOM_WIDTH -
 					(secundariaFloor1 > 0 ? BANO_WIDTH + ESCALERA_WIDTH : 0) -
-					ambientesSecundariaTotal
+					ambientesSecundariaTotal -
+					ambientesReubicadosSecundaria.reduce(
+						(sum, a) => sum + a.ancho,
+						0
+					) -
+					primariaEnPabellonSecundaria * CLASSROOM_WIDTH
 			),
 		};
 
@@ -4118,25 +4449,6 @@ EOF
 
 		const superioresFloor2Final = ambientesRestantes;
 
-		// Cuadrante interior
-		const cuadranteInterior = {
-			x: CLASSROOM_WIDTH + CIRCULACION_LATERAL,
-			y: CLASSROOM_HEIGHT + CIRCULACION_ENTRE_PABELLONES,
-			width:
-				maxRectangle.width -
-				CLASSROOM_WIDTH * 2 -
-				CIRCULACION_LATERAL * 2,
-			height:
-				maxRectangle.height -
-				CLASSROOM_HEIGHT * 2 -
-				CIRCULACION_ENTRE_PABELLONES * 2,
-		};
-
-		const distribucionCuadrante = distribuirEnCuadranteInterior(
-			cuadranteInterior,
-			lateralesCancha
-		);
-
 		const needsSecondFloor =
 			inicialFloor2 +
 				primariaFloor2 +
@@ -4150,8 +4462,8 @@ EOF
 		console.log("Distribución vertical calculada:", {
 			usandoPabellonIzquierdoPara: usarPabellonIzquierdaPara,
 			inicial: `${inicialFloor1} + ${inicialFloor2} = ${inicialTotal}`,
-			primaria: `${primariaFloor1} + ${primariaFloor2} = ${primariaTotal}`,
-			secundaria: `${secundariaFloor1} + ${secundariaFloor2} = ${secundariaTotal}`,
+			primaria: `${primariaFloor1} + ${primariaEnPabellonSecundaria} + ${primariaFloor2} = ${primariaTotal}`,
+			secundaria: `${secundariaFloor1} + ${secundariaEnPabellonPrimaria} + ${secundariaFloor2} = ${secundariaTotal}`,
 		});
 
 		setDistribution({
@@ -4160,6 +4472,8 @@ EOF
 					inicial: inicialFloor1,
 					primaria: primariaFloor1,
 					secundaria: secundariaFloor1,
+					primariaEnPabellonSecundaria: primariaEnPabellonSecundaria,
+					secundariaEnPabellonPrimaria: secundariaEnPabellonPrimaria,
 					inicialBanoPos: POSICION_ESCALERA,
 					primariaBanoPos: POSICION_ESCALERA,
 					secundariaBanoPos: POSICION_ESCALERA,
@@ -4167,6 +4481,9 @@ EOF
 					ambientesInicialLibre: ambientesInicialLibre,
 					ambientesPrimariaLibre: ambientesPrimariaLibre,
 					ambientesSecundariaLibre: ambientesSecundariaLibre,
+					ambientesReubicadosPrimaria: ambientesReubicadosPrimaria,
+					ambientesReubicadosSecundaria:
+						ambientesReubicadosSecundaria,
 					cuadranteInterior: cuadranteInterior,
 					distribucionCuadrante: distribucionCuadrante,
 				},
@@ -4174,6 +4491,8 @@ EOF
 					inicial: inicialFloor2,
 					primaria: primariaFloor2,
 					secundaria: secundariaFloor2,
+					primariaEnPabellonSecundaria: 0,
+					secundariaEnPabellonPrimaria: 0,
 					inicialBanoPos: POSICION_ESCALERA,
 					primariaBanoPos: POSICION_ESCALERA,
 					secundariaBanoPos: POSICION_ESCALERA,
@@ -4181,25 +4500,249 @@ EOF
 					ambientesInicialLibre: [],
 					ambientesPrimariaLibre: [],
 					ambientesSecundariaLibre: [],
+					ambientesReubicadosPrimaria: [],
+					ambientesReubicadosSecundaria: [],
 					tieneBanos: false,
 				},
 			},
 			totalFloors: floors,
 			ambientesEnPabellones: enPabellones,
 			ambientesLateralesCancha: lateralesCancha,
-			pabellonInferiorEs: usarPabellonIzquierdaPara, // ✅ CAMBIADO: ahora refleja qué nivel usa el pabellón izquierdo
+			pabellonInferiorEs: usarPabellonIzquierdaPara,
 			layoutMode: "vertical",
 		});
+	};
+
+	const determineLayoutStrategy = (rect) => {
+		const CANCHA_WIDTH = 28;
+		const CANCHA_HEIGHT = 15;
+		const CLASSROOM_WIDTH = 7.2;
+		const CLASSROOM_HEIGHT = 7.8;
+		const MIN_CIRCULACION = 3; // Ajusta según tus necesidades
+
+		const rectWidth = rect.width;
+		const rectHeight = rect.height;
+
+		// Espacio mínimo necesario para cuadrante interior
+		const minWidthForInterior =
+			CANCHA_WIDTH + CLASSROOM_WIDTH * 2 + MIN_CIRCULACION * 2;
+		const minHeightForInterior =
+			CANCHA_HEIGHT + CLASSROOM_HEIGHT * 2 + MIN_CIRCULACION * 2;
+
+		// Evaluar si ambas dimensiones permiten cuadrante interior
+		const canUseInteriorQuadrant =
+			rectWidth >= minWidthForInterior &&
+			rectHeight >= minHeightForInterior;
+
+		if (canUseInteriorQuadrant) {
+			// Decidir entre horizontal o vertical según proporciones
+			const aspectRatio = rectWidth / rectHeight;
+			return {
+				strategy: "interior-quadrant",
+				layoutMode: aspectRatio > 1.2 ? "horizontal" : "vertical",
+			};
+		} else {
+			// Usar dos cuadrantes separados
+			// Decidir orientación según dimensión mayor
+			if (rectHeight > rectWidth) {
+				return {
+					strategy: "two-quadrants",
+					orientation: "vertical-stack", // Cancha arriba, aulas abajo
+					canchaSpace: {
+						width: rectWidth,
+						height: CANCHA_HEIGHT + MIN_CIRCULACION,
+					},
+					aulasSpace: {
+						width: rectWidth,
+						height:
+							rectHeight - (CANCHA_HEIGHT + MIN_CIRCULACION * 2),
+					},
+				};
+			} else {
+				return {
+					strategy: "two-quadrants",
+					orientation: "horizontal-stack", // Cancha a un lado, aulas al otro
+					canchaSpace: {
+						width: CANCHA_WIDTH + MIN_CIRCULACION,
+						height: rectHeight,
+					},
+					aulasSpace: {
+						width: rectWidth - (CANCHA_WIDTH + MIN_CIRCULACION * 2),
+						height: rectHeight,
+					},
+				};
+			}
+		}
+	};
+
+	const calculateTwoQuadrantsDistribution = (
+		inicialTotal,
+		primariaTotal,
+		secundariaTotal,
+		enPabellones,
+		lateralesCancha,
+		superiores,
+		layoutStrategy
+	) => {
+		const { orientation, canchaSpace, aulasSpace } = layoutStrategy;
+
+		// Calcular capacidad del cuadrante de aulas
+		const aulasCapacity = calculateCapacityForAulasQuadrant(
+			aulasSpace,
+			enPabellones
+		);
+
+		let inicialFloor1 = 0,
+			inicialFloor2 = 0;
+		let primariaFloor1 = 0,
+			primariaFloor2 = 0;
+		let secundariaFloor1 = 0,
+			secundariaFloor2 = 0;
+
+		// Distribuir aulas según capacidad
+		inicialFloor1 = Math.min(inicialTotal, aulasCapacity.inicial.max);
+		inicialFloor2 = Math.max(0, inicialTotal - inicialFloor1);
+
+		primariaFloor1 = Math.min(primariaTotal, aulasCapacity.primaria.max);
+		primariaFloor2 = Math.max(0, primariaTotal - primariaFloor1);
+
+		secundariaFloor1 = Math.min(
+			secundariaTotal,
+			aulasCapacity.secundaria.max
+		);
+		secundariaFloor2 = Math.max(0, secundariaTotal - secundariaFloor1);
+
+		// ✅ Ambientes "superiores": Como no hay espacio interior, van directo al piso 2
+		// (En el piso 1 solo están las aulas en los bordes)
+		const superioresFloor1 = [];
+		const superioresFloor2 = superiores; // Todos van al piso 2
+
+		const needsSecondFloor =
+			inicialFloor2 +
+				primariaFloor2 +
+				secundariaFloor2 +
+				superioresFloor2.length >
+			0;
+
+		const floors = needsSecondFloor ? 2 : 1;
+
+		setTotalFloors(floors);
+
+		setDistribution({
+			strategy: "two-quadrants",
+			orientation: orientation,
+			canchaQuadrant: {
+				position: orientation === "vertical-stack" ? "top" : "left",
+				dimensions: canchaSpace,
+				hasCancha: true,
+			},
+			aulasQuadrant: {
+				position: orientation === "vertical-stack" ? "bottom" : "right",
+				dimensions: aulasSpace,
+				hasCuadranteInterior: false, // ❌ No hay cuadrante interior
+			},
+			floors: {
+				1: {
+					inicial: inicialFloor1,
+					primaria: primariaFloor1,
+					secundaria: secundariaFloor1,
+					inicialBanoPos: 1,
+					primariaBanoPos: 1,
+					secundariaBanoPos: 1,
+					ambientesSuperiores: superioresFloor1, // Vacío en piso 1
+					ambientesEnPabellones: enPabellones,
+					ambientesInicialLibre: [],
+					ambientesPrimariaLibre: [],
+					ambientesSecundariaLibre: [],
+					cuadranteInterior: null, // No existe
+					distribucionCuadrante: null, // No existe
+				},
+				2: needsSecondFloor
+					? {
+							inicial: inicialFloor2,
+							primaria: primariaFloor2,
+							secundaria: secundariaFloor2,
+							inicialBanoPos: 1,
+							primariaBanoPos: 1,
+							secundariaBanoPos: 1,
+							ambientesSuperiores: superioresFloor2, // Aquí van todos los ambientes "superiores"
+							ambientesEnPabellones: [],
+							ambientesInicialLibre: [],
+							ambientesPrimariaLibre: [],
+							ambientesSecundariaLibre: [],
+							cuadranteInterior: null,
+							distribucionCuadrante: null,
+							tieneBanos: false,
+					  }
+					: null,
+			},
+			totalFloors: floors,
+			ambientesEnPabellones: enPabellones,
+			ambientesLateralesCancha: [], // En dos cuadrantes no hay laterales de cancha
+			layoutMode: orientation,
+		});
+	};
+
+	const calculateCapacityForAulasQuadrant = (aulasSpace, enPabellones) => {
+		const { width, height } = aulasSpace;
+
+		const horizontalSpace = width - CIRCULACION_LATERAL * 2;
+		const verticalSpace = height - CIRCULACION_LATERAL * 2;
+
+		// Calcular espacio ocupado por ambientes en pabellones
+		const ambientesPrimariaTotal = enPabellones
+			.filter((a) => a.pabellon === "primaria")
+			.reduce((sum, amb) => sum + amb.alto, 0);
+
+		const ambientesSecundariaTotal = enPabellones
+			.filter((a) => a.pabellon === "secundaria")
+			.reduce((sum, amb) => sum + amb.alto, 0);
+
+		const ambientesInicialTotal = enPabellones
+			.filter((a) => a.pabellon === "inicial")
+			.reduce((sum, amb) => sum + amb.ancho, 0);
+
+		// INICIAL - horizontal en la parte inferior
+		const inicialSpace = horizontalSpace - ENTRADA_WIDTH;
+		const inicialNeedsServices = BANO_WIDTH + ESCALERA_WIDTH;
+		const inicialAvailableForClassrooms =
+			inicialSpace - inicialNeedsServices - ambientesInicialTotal;
+		const maxInicialClassrooms = Math.floor(
+			inicialAvailableForClassrooms / CLASSROOM_WIDTH
+		);
+
+		// PRIMARIA - vertical en lado izquierdo
+		const primariaSpace = verticalSpace;
+		const primariaNeedsServices = BANO_HEIGHT + ESCALERA_HEIGHT;
+		const primariaAvailableForClassrooms =
+			primariaSpace - primariaNeedsServices - ambientesPrimariaTotal;
+		const maxPrimariaClassrooms = Math.floor(
+			primariaAvailableForClassrooms / CLASSROOM_HEIGHT
+		);
+
+		// SECUNDARIA - vertical en lado derecho
+		const secundariaSpace = verticalSpace;
+		const secundariaNeedsServices = BANO_HEIGHT + ESCALERA_HEIGHT;
+		const secundariaAvailableForClassrooms =
+			secundariaSpace -
+			secundariaNeedsServices -
+			ambientesSecundariaTotal;
+		const maxSecundariaClassrooms = Math.floor(
+			secundariaAvailableForClassrooms / CLASSROOM_HEIGHT
+		);
+
+		return {
+			inicial: { max: Math.max(0, maxInicialClassrooms) },
+			primaria: { max: Math.max(0, maxPrimariaClassrooms) },
+			secundaria: { max: Math.max(0, maxSecundariaClassrooms) },
+		};
 	};
 
 	const calculateDistribution = () => {
 		const currentCapacity = calculateCapacity();
 		if (!maxRectangle) return;
-		console.log("maxRectangle:::::::", maxRectangle);
-		console.log("capacidad info:::::", currentCapacity);
-
-		console.log("Modo seleccionado:", layoutMode);
-
+		console.log("capacityInfo", capacityInfo);
+		console.log("currentCapacity", currentCapacity);
 		const inicialTotal = parseInt(classroomInicial) || 0;
 		const primariaTotal = parseInt(classroomPrimaria) || 0;
 		const secundariaTotal = parseInt(classroomSecundaria) || 0;
@@ -4209,16 +4752,52 @@ EOF
 			return;
 		}
 
-		const { enPabellones, lateralesCancha, superiores } =
-			classifyAmbientes(arrayTransformado);
-
-		// ✅ VALIDAR ESPACIO PARA AMBIENTES SUPERIORES
-		const totalSuperioresWidth = superiores.reduce(
-			(sum, amb) => sum + amb.ancho,
-			0
+		const { enPabellones, lateralesCancha, superiores } = classifyAmbientes(
+			arrayTransformado,
+			primariaTotal > 0,
+			secundariaTotal > 0
 		);
 
-		// ✅ LLAMAR A LA FUNCIÓN SEGÚN EL MODO
+		// // ✅ DETERMINAR ESTRATEGIA SEGÚN DIMENSIONES
+		// const layoutStrategy = determineLayoutStrategy(maxRectangle);
+		// console.log("Estrategia de distribución:", layoutStrategy);
+
+		// // ✅ LLAMAR A LA FUNCIÓN SEGÚN EL MODO
+		// if (layoutStrategy.strategy === "interior-quadrant") {
+		// 	// Usar el sistema actual
+		// 	if (layoutStrategy.layoutMode === "horizontal") {
+		// 		calculateHorizontalDistribution(
+		// 			inicialTotal,
+		// 			primariaTotal,
+		// 			secundariaTotal,
+		// 			enPabellones,
+		// 			lateralesCancha,
+		// 			superiores,
+		// 			currentCapacity
+		// 		);
+		// 	} else {
+		// 		calculateVerticalDistribution(
+		// 			inicialTotal,
+		// 			primariaTotal,
+		// 			secundariaTotal,
+		// 			enPabellones,
+		// 			lateralesCancha,
+		// 			superiores,
+		// 			currentCapacity
+		// 		);
+		// 	}
+		// } else {
+		// 	// Usar sistema de dos cuadrantes
+		// 	calculateTwoQuadrantsDistribution(
+		// 		inicialTotal,
+		// 		primariaTotal,
+		// 		secundariaTotal,
+		// 		enPabellones,
+		// 		lateralesCancha,
+		// 		superiores,
+		// 		layoutStrategy
+		// 	);
+		// }
 		if (layoutMode === "horizontal") {
 			// Tu distribución actual
 			calculateHorizontalDistribution(
@@ -4242,6 +4821,1517 @@ EOF
 			);
 		}
 	};
+
+	// const renderLayoutHorizontal = (
+	// 	floorData,
+	// 	origin,
+	// 	dirX,
+	// 	dirY,
+	// 	rectWidth,
+	// 	rectHeight,
+	// 	createRoomCorners,
+	// 	elementos
+	// ) => {
+	// 	// ========================================
+	// 	// AMBIENTES SUPERIORES + ENTRADA (arriba, horizontal)
+	// 	// ========================================
+	// 	if (
+	// 		currentFloor === 1 &&
+	// 		floorData.ambientesSuperiores &&
+	// 		floorData.ambientesSuperiores.length > 0
+	// 	) {
+	// 		const totalAmbientes = floorData.ambientesSuperiores.length;
+	// 		const totalAmbientesWidth = floorData.ambientesSuperiores.reduce(
+	// 			(sum, amb) => sum + amb.ancho,
+	// 			0
+	// 		);
+
+	// 		const posicionEntrada = Math.floor(totalAmbientes / 2);
+	// 		const totalWidth = totalAmbientesWidth + ENTRADA_WIDTH;
+	// 		const startXAmbientes = (rectWidth - totalWidth) / 2;
+
+	// 		let currentXAmbiente = startXAmbientes;
+	// 		const ambienteY = rectHeight - CLASSROOM_HEIGHT;
+
+	// 		// Ambientes ANTES de la entrada
+	// 		floorData.ambientesSuperiores
+	// 			.slice(0, posicionEntrada)
+	// 			.forEach((ambiente) => {
+	// 				const x =
+	// 					origin.east +
+	// 					dirX.east * currentXAmbiente +
+	// 					dirY.east * (rectHeight - ambiente.alto);
+	// 				const y =
+	// 					origin.north +
+	// 					dirX.north * currentXAmbiente +
+	// 					dirY.north * (rectHeight - ambiente.alto);
+
+	// 				const ambienteData = createRoomCorners(
+	// 					x,
+	// 					y,
+	// 					ambiente.ancho,
+	// 					ambiente.alto
+	// 				);
+	// 				elementos.ambientes.push({
+	// 					nombre: ambiente.nombre,
+	// 					tipo: "superior",
+	// 					corners: ambienteData.corners,
+	// 					realCorners: ambienteData.realCorners,
+	// 				});
+	// 				currentXAmbiente += ambiente.ancho;
+	// 			});
+
+	// 		// ENTRADA AL MEDIO
+	// 		const xEnt =
+	// 			origin.east +
+	// 			dirX.east * currentXAmbiente +
+	// 			dirY.east * ambienteY;
+	// 		const yEnt =
+	// 			origin.north +
+	// 			dirX.north * currentXAmbiente +
+	// 			dirY.north * ambienteY;
+
+	// 		const entradaData = createRoomCorners(
+	// 			xEnt,
+	// 			yEnt,
+	// 			ENTRADA_WIDTH,
+	// 			CLASSROOM_HEIGHT
+	// 		);
+	// 		elementos.entrada = {
+	// 			corners: entradaData.corners,
+	// 			realCorners: entradaData.realCorners,
+	// 		};
+	// 		currentXAmbiente += ENTRADA_WIDTH;
+
+	// 		// Ambientes DESPUÉS de la entrada
+	// 		floorData.ambientesSuperiores
+	// 			.slice(posicionEntrada)
+	// 			.forEach((ambiente) => {
+	// 				const x =
+	// 					origin.east +
+	// 					dirX.east * currentXAmbiente +
+	// 					dirY.east * (rectHeight - ambiente.alto);
+	// 				const y =
+	// 					origin.north +
+	// 					dirX.north * currentXAmbiente +
+	// 					dirY.north * (rectHeight - ambiente.alto);
+
+	// 				const ambienteData = createRoomCorners(
+	// 					x,
+	// 					y,
+	// 					ambiente.ancho,
+	// 					ambiente.alto
+	// 				);
+	// 				elementos.ambientes.push({
+	// 					nombre: ambiente.nombre,
+	// 					tipo: "superior",
+	// 					corners: ambienteData.corners,
+	// 					realCorners: ambienteData.realCorners,
+	// 				});
+	// 				currentXAmbiente += ambiente.ancho;
+	// 			});
+	// 	} else if (
+	// 		currentFloor === 2 &&
+	// 		floorData.ambientesSuperiores &&
+	// 		floorData.ambientesSuperiores.length > 0
+	// 	) {
+	// 		// Piso 2: solo ambientes (sin entrada)
+	// 		const totalAmbientesWidth = floorData.ambientesSuperiores.reduce(
+	// 			(sum, amb) => sum + amb.ancho,
+	// 			0
+	// 		);
+	// 		const startXAmbientes = (rectWidth - totalAmbientesWidth) / 2;
+	// 		let currentXAmbiente = startXAmbientes;
+
+	// 		floorData.ambientesSuperiores.forEach((ambiente) => {
+	// 			const x =
+	// 				origin.east +
+	// 				dirX.east * currentXAmbiente +
+	// 				dirY.east * (rectHeight - ambiente.alto);
+	// 			const y =
+	// 				origin.north +
+	// 				dirX.north * currentXAmbiente +
+	// 				dirY.north * (rectHeight - ambiente.alto);
+
+	// 			const ambienteData = createRoomCorners(
+	// 				x,
+	// 				y,
+	// 				ambiente.ancho,
+	// 				ambiente.alto
+	// 			);
+	// 			elementos.ambientes.push({
+	// 				nombre: ambiente.nombre,
+	// 				tipo: "superior",
+	// 				corners: ambienteData.corners,
+	// 				realCorners: ambienteData.realCorners,
+	// 			});
+	// 			currentXAmbiente += ambiente.ancho;
+	// 		});
+	// 	}
+
+	// 	// ========================================
+	// 	// PABELLÓN INICIAL (abajo, horizontal)
+	// 	// ========================================
+	// 	const pabellonInferiorColor =
+	// 		distribution.pabellonInferiorEs === "primaria"
+	// 			? "primaria"
+	// 			: distribution.pabellonInferiorEs === "secundaria"
+	// 			? "secundaria"
+	// 			: "inicial";
+
+	// 	// ✅ CALCULAR ANCHO TOTAL DEL PABELLÓN INICIAL
+	// 	let anchoTotalInicial = floorData.inicial * CLASSROOM_WIDTH;
+
+	// 	// Agregar escalera y baño
+	// 	if (floorData.inicial > 0) {
+	// 		if (totalFloors > 1) {
+	// 			anchoTotalInicial += ESCALERA_WIDTH;
+	// 		}
+	// 		if (currentFloor === 1) {
+	// 			anchoTotalInicial += BANO_WIDTH;
+	// 		}
+	// 	}
+
+	// 	// Agregar psicomotricidad si existe
+	// 	const psicomotricidadEnInicial =
+	// 		distribution.ambientesEnPabellones.find(
+	// 			(a) => a.pabellon === "inicial"
+	// 		);
+	// 	if (
+	// 		psicomotricidadEnInicial &&
+	// 		currentFloor === 1 &&
+	// 		floorData.inicial > 0
+	// 	) {
+	// 		anchoTotalInicial += psicomotricidadEnInicial.ancho;
+	// 	}
+
+	// 	// Agregar ambientes libres
+	// 	if (
+	// 		floorData.ambientesInicialLibre &&
+	// 		floorData.ambientesInicialLibre.length > 0
+	// 	) {
+	// 		floorData.ambientesInicialLibre.forEach((ambiente) => {
+	// 			anchoTotalInicial += ambiente.ancho;
+	// 		});
+	// 	}
+
+	// 	// ✅ CENTRAR EN EL RECTÁNGULO (descontando entrada)
+	// 	const espacioDisponibleInicial =
+	// 		rectWidth - CIRCULACION_LATERAL * 2 - ENTRADA_WIDTH;
+	// 	let currentXInicial =
+	// 		CIRCULACION_LATERAL +
+	// 		(espacioDisponibleInicial - anchoTotalInicial) / 2;
+
+	// 	// Renderizar aulas
+	// 	for (let i = 0; i < floorData.inicial; i++) {
+	// 		const x = origin.east + dirX.east * currentXInicial;
+	// 		const y = origin.north + dirX.north * currentXInicial;
+
+	// 		const aulaData = createRoomCorners(
+	// 			x,
+	// 			y,
+	// 			CLASSROOM_WIDTH,
+	// 			CLASSROOM_HEIGHT
+	// 		);
+
+	// 		if (pabellonInferiorColor === "inicial") {
+	// 			elementos.inicial.push({
+	// 				corners: aulaData.corners,
+	// 				realCorners: aulaData.realCorners,
+	// 			});
+	// 		} else if (pabellonInferiorColor === "primaria") {
+	// 			elementos.primaria.push({
+	// 				corners: aulaData.corners,
+	// 				realCorners: aulaData.realCorners,
+	// 			});
+	// 		} else if (pabellonInferiorColor === "secundaria") {
+	// 			elementos.secundaria.push({
+	// 				corners: aulaData.corners,
+	// 				realCorners: aulaData.realCorners,
+	// 			});
+	// 		}
+
+	// 		currentXInicial += CLASSROOM_WIDTH;
+
+	// 		// Escalera y baño después de la primera aula
+	// 		if (i === 0 && floorData.inicial > 0) {
+	// 			// ✅ ESCALERA: solo si hay más de un piso
+	// 			if (totalFloors > 1) {
+	// 				const xEsc = origin.east + dirX.east * currentXInicial;
+	// 				const yEsc = origin.north + dirX.north * currentXInicial;
+
+	// 				const escaleraData = createRoomCorners(
+	// 					xEsc,
+	// 					yEsc,
+	// 					ESCALERA_WIDTH,
+	// 					ESCALERA_HEIGHT
+	// 				);
+	// 				elementos.escaleras.push({
+	// 					nivel: "Inicial",
+	// 					corners: escaleraData.corners,
+	// 					realCorners: escaleraData.realCorners,
+	// 				});
+	// 				currentXInicial += ESCALERA_WIDTH;
+	// 			}
+
+	// 			// ✅ BAÑO: siempre en piso 1
+	// 			if (currentFloor === 1) {
+	// 				const xBano = origin.east + dirX.east * currentXInicial;
+	// 				const yBano = origin.north + dirX.north * currentXInicial;
+
+	// 				const banoData = createRoomCorners(
+	// 					xBano,
+	// 					yBano,
+	// 					BANO_WIDTH,
+	// 					BANO_HEIGHT
+	// 				);
+	// 				elementos.banos.push({
+	// 					nivel: "Inicial",
+	// 					corners: banoData.corners,
+	// 					realCorners: banoData.realCorners,
+	// 				});
+	// 				currentXInicial += BANO_WIDTH;
+	// 			}
+	// 		}
+	// 	}
+
+	// 	// Psicomotricidad
+	// 	if (
+	// 		psicomotricidadEnInicial &&
+	// 		currentFloor === 1 &&
+	// 		floorData.inicial > 0
+	// 	) {
+	// 		const x = origin.east + dirX.east * currentXInicial;
+	// 		const y = origin.north + dirX.north * currentXInicial;
+
+	// 		const psicomotricidadData = createRoomCorners(
+	// 			x,
+	// 			y,
+	// 			psicomotricidadEnInicial.ancho,
+	// 			psicomotricidadEnInicial.alto
+	// 		);
+	// 		elementos.ambientes.push({
+	// 			nombre: psicomotricidadEnInicial.nombre,
+	// 			tipo: "pabellon",
+	// 			corners: psicomotricidadData.corners,
+	// 			realCorners: psicomotricidadData.realCorners,
+	// 		});
+	// 		currentXInicial += psicomotricidadEnInicial.ancho;
+	// 	}
+
+	// 	// Ambientes libres
+	// 	if (
+	// 		floorData.ambientesInicialLibre &&
+	// 		floorData.ambientesInicialLibre.length > 0
+	// 	) {
+	// 		floorData.ambientesInicialLibre.forEach((ambiente) => {
+	// 			const x = origin.east + dirX.east * currentXInicial;
+	// 			const y = origin.north + dirX.north * currentXInicial;
+
+	// 			const ambienteData = createRoomCorners(
+	// 				x,
+	// 				y,
+	// 				ambiente.ancho,
+	// 				ambiente.alto
+	// 			);
+	// 			elementos.ambientes.push({
+	// 				nombre: ambiente.nombre,
+	// 				tipo: "pabellon_libre",
+	// 				corners: ambienteData.corners,
+	// 				realCorners: ambienteData.realCorners,
+	// 			});
+	// 			currentXInicial += ambiente.ancho;
+	// 		});
+	// 	}
+
+	// 	// ========================================
+	// 	// PABELLÓN PRIMARIA (izquierda, vertical)
+	// 	// ========================================
+	// 	const startYPrimaria = CLASSROOM_HEIGHT + CIRCULACION_ENTRE_PABELLONES;
+	// 	let currentYPrimaria = startYPrimaria;
+
+	// 	// Solo renderizar si hay aulas O aulas adicionales O ambientes reubicados
+	// 	if (
+	// 		floorData.primaria > 0 ||
+	// 		(floorData.secundariaEnPabellonPrimaria &&
+	// 			floorData.secundariaEnPabellonPrimaria > 0) ||
+	// 		(floorData.ambientesReubicadosPrimaria &&
+	// 			floorData.ambientesReubicadosPrimaria.length > 0)
+	// 	) {
+	// 		// Renderizar aulas normales de primaria
+	// 		for (let i = 0; i < floorData.primaria; i++) {
+	// 			const x = origin.east + dirY.east * currentYPrimaria;
+	// 			const y = origin.north + dirY.north * currentYPrimaria;
+
+	// 			const aulaData = createRoomCorners(
+	// 				x,
+	// 				y,
+	// 				CLASSROOM_WIDTH,
+	// 				CLASSROOM_HEIGHT
+	// 			);
+	// 			elementos.primaria.push({
+	// 				corners: aulaData.corners,
+	// 				realCorners: aulaData.realCorners,
+	// 			});
+	// 			currentYPrimaria += CLASSROOM_HEIGHT;
+
+	// 			if (i === 0 && floorData.primaria > 0) {
+	// 				// ✅ ESCALERA: solo si hay más de un piso
+	// 				if (totalFloors > 1) {
+	// 					const xEsc = origin.east + dirY.east * currentYPrimaria;
+	// 					const yEsc =
+	// 						origin.north + dirY.north * currentYPrimaria;
+
+	// 					const escaleraData = createRoomCorners(
+	// 						xEsc,
+	// 						yEsc,
+	// 						CLASSROOM_WIDTH,
+	// 						ESCALERA_HEIGHT
+	// 					);
+	// 					elementos.escaleras.push({
+	// 						nivel: "Primaria",
+	// 						corners: escaleraData.corners,
+	// 						realCorners: escaleraData.realCorners,
+	// 					});
+	// 					currentYPrimaria += ESCALERA_HEIGHT;
+	// 				}
+
+	// 				// ✅ BAÑO: siempre en piso 1
+	// 				if (currentFloor === 1) {
+	// 					const xBano =
+	// 						origin.east + dirY.east * currentYPrimaria;
+	// 					const yBano =
+	// 						origin.north + dirY.north * currentYPrimaria;
+
+	// 					const banoData = createRoomCorners(
+	// 						xBano,
+	// 						yBano,
+	// 						CLASSROOM_WIDTH,
+	// 						BANO_HEIGHT
+	// 					);
+	// 					elementos.banos.push({
+	// 						nivel: "Primaria",
+	// 						corners: banoData.corners,
+	// 						realCorners: banoData.realCorners,
+	// 					});
+	// 					currentYPrimaria += BANO_HEIGHT;
+	// 				}
+	// 			}
+	// 		}
+
+	// 		// ✅ AULAS DE SECUNDARIA EN PABELLÓN PRIMARIA (si el pabellón estaba vacío)
+	// 		if (
+	// 			floorData.secundariaEnPabellonPrimaria &&
+	// 			floorData.secundariaEnPabellonPrimaria > 0
+	// 		) {
+	// 			console.log(
+	// 				`🎨 Renderizando ${floorData.secundariaEnPabellonPrimaria} aulas de secundaria en pabellón primaria`
+	// 			);
+
+	// 			for (
+	// 				let i = 0;
+	// 				i < floorData.secundariaEnPabellonPrimaria;
+	// 				i++
+	// 			) {
+	// 				const x = origin.east + dirY.east * currentYPrimaria;
+	// 				const y = origin.north + dirY.north * currentYPrimaria;
+
+	// 				const aulaData = createRoomCorners(
+	// 					x,
+	// 					y,
+	// 					CLASSROOM_WIDTH,
+	// 					CLASSROOM_HEIGHT
+	// 				);
+	// 				elementos.secundaria.push({
+	// 					corners: aulaData.corners,
+	// 					realCorners: aulaData.realCorners,
+	// 				});
+	// 				currentYPrimaria += CLASSROOM_HEIGHT;
+	// 				console.log(
+	// 					`  ✅ Aula secundaria ${i + 1} en pabellón primaria`
+	// 				);
+	// 			}
+	// 		}
+
+	// 		// Ambientes en pabellón primaria
+	// 		const ambientesPrimariaEnPabellon =
+	// 			distribution.ambientesEnPabellones.filter(
+	// 				(a) => a.pabellon === "primaria"
+	// 			);
+
+	// 		if (
+	// 			ambientesPrimariaEnPabellon.length > 0 &&
+	// 			currentFloor === 1 &&
+	// 			floorData.primaria > 0
+	// 		) {
+	// 			ambientesPrimariaEnPabellon.forEach((ambiente) => {
+	// 				const x = origin.east + dirY.east * currentYPrimaria;
+	// 				const y = origin.north + dirY.north * currentYPrimaria;
+
+	// 				const ambienteData = createRoomCorners(
+	// 					x,
+	// 					y,
+	// 					ambiente.ancho,
+	// 					ambiente.alto
+	// 				);
+	// 				elementos.ambientes.push({
+	// 					nombre: ambiente.nombre,
+	// 					tipo: "pabellon",
+	// 					corners: ambienteData.corners,
+	// 					realCorners: ambienteData.realCorners,
+	// 				});
+	// 				currentYPrimaria += ambiente.alto;
+	// 			});
+	// 		}
+
+	// 		// Ambientes en espacio libre de primaria
+	// 		if (
+	// 			floorData.ambientesPrimariaLibre &&
+	// 			floorData.ambientesPrimariaLibre.length > 0
+	// 		) {
+	// 			floorData.ambientesPrimariaLibre.forEach((ambiente) => {
+	// 				const x = origin.east + dirY.east * currentYPrimaria;
+	// 				const y = origin.north + dirY.north * currentYPrimaria;
+
+	// 				const ambienteData = createRoomCorners(
+	// 					x,
+	// 					y,
+	// 					ambiente.ancho,
+	// 					ambiente.alto
+	// 				);
+	// 				elementos.ambientes.push({
+	// 					nombre: ambiente.nombre,
+	// 					tipo: "pabellon_libre",
+	// 					corners: ambienteData.corners,
+	// 					realCorners: ambienteData.realCorners,
+	// 				});
+	// 				currentYPrimaria += ambiente.alto;
+	// 			});
+	// 		}
+
+	// 		// ✅ Ambientes reubicados en pabellón primaria
+	// 		if (
+	// 			floorData.ambientesReubicadosPrimaria &&
+	// 			floorData.ambientesReubicadosPrimaria.length > 0 &&
+	// 			currentFloor === 1
+	// 		) {
+	// 			console.log(
+	// 				`🎨 Renderizando ${floorData.ambientesReubicadosPrimaria.length} ambientes reubicados en primaria`
+	// 			);
+
+	// 			floorData.ambientesReubicadosPrimaria.forEach((ambiente) => {
+	// 				const x = origin.east + dirY.east * currentYPrimaria;
+	// 				const y = origin.north + dirY.north * currentYPrimaria;
+
+	// 				const ambienteData = createRoomCorners(
+	// 					x,
+	// 					y,
+	// 					ambiente.ancho,
+	// 					ambiente.alto
+	// 				);
+	// 				elementos.ambientes.push({
+	// 					nombre: ambiente.nombre,
+	// 					tipo: "reubicado",
+	// 					corners: ambienteData.corners,
+	// 					realCorners: ambienteData.realCorners,
+	// 				});
+	// 				currentYPrimaria += ambiente.alto;
+	// 				console.log(
+	// 					`  ✅ ${
+	// 						ambiente.nombre
+	// 					} renderizado en Y: ${currentYPrimaria.toFixed(1)}`
+	// 				);
+	// 			});
+	// 		}
+	// 	}
+
+	// 	// ========================================
+	// 	// PABELLÓN SECUNDARIA (derecha, vertical)
+	// 	// ========================================
+	// 	let currentYSecundaria = startYPrimaria;
+
+	// 	// Solo renderizar si hay aulas O aulas adicionales O ambientes reubicados
+	// 	if (
+	// 		floorData.secundaria > 0 ||
+	// 		(floorData.primariaEnPabellonSecundaria &&
+	// 			floorData.primariaEnPabellonSecundaria > 0) ||
+	// 		(floorData.ambientesReubicadosSecundaria &&
+	// 			floorData.ambientesReubicadosSecundaria.length > 0)
+	// 	) {
+	// 		// Renderizar aulas normales de secundaria
+	// 		for (let i = 0; i < floorData.secundaria; i++) {
+	// 			const x =
+	// 				origin.east +
+	// 				dirX.east * (rectWidth - CLASSROOM_WIDTH) +
+	// 				dirY.east * currentYSecundaria;
+	// 			const y =
+	// 				origin.north +
+	// 				dirX.north * (rectWidth - CLASSROOM_WIDTH) +
+	// 				dirY.north * currentYSecundaria;
+
+	// 			const aulaData = createRoomCorners(
+	// 				x,
+	// 				y,
+	// 				CLASSROOM_WIDTH,
+	// 				CLASSROOM_HEIGHT
+	// 			);
+	// 			elementos.secundaria.push({
+	// 				corners: aulaData.corners,
+	// 				realCorners: aulaData.realCorners,
+	// 			});
+	// 			currentYSecundaria += CLASSROOM_HEIGHT;
+
+	// 			if (i === 0 && floorData.secundaria > 0) {
+	// 				// ✅ ESCALERA: solo si hay más de un piso
+	// 				if (totalFloors > 1) {
+	// 					const xEsc =
+	// 						origin.east +
+	// 						dirX.east * (rectWidth - CLASSROOM_WIDTH) +
+	// 						dirY.east * currentYSecundaria;
+	// 					const yEsc =
+	// 						origin.north +
+	// 						dirX.north * (rectWidth - CLASSROOM_WIDTH) +
+	// 						dirY.north * currentYSecundaria;
+
+	// 					const escaleraData = createRoomCorners(
+	// 						xEsc,
+	// 						yEsc,
+	// 						CLASSROOM_WIDTH,
+	// 						ESCALERA_HEIGHT
+	// 					);
+	// 					elementos.escaleras.push({
+	// 						nivel: "Secundaria",
+	// 						corners: escaleraData.corners,
+	// 						realCorners: escaleraData.realCorners,
+	// 					});
+	// 					currentYSecundaria += ESCALERA_HEIGHT;
+	// 				}
+
+	// 				// ✅ BAÑO: siempre en piso 1
+	// 				if (currentFloor === 1) {
+	// 					const xBano =
+	// 						origin.east +
+	// 						dirX.east * (rectWidth - CLASSROOM_WIDTH) +
+	// 						dirY.east * currentYSecundaria;
+	// 					const yBano =
+	// 						origin.north +
+	// 						dirX.north * (rectWidth - CLASSROOM_WIDTH) +
+	// 						dirY.north * currentYSecundaria;
+
+	// 					const banoData = createRoomCorners(
+	// 						xBano,
+	// 						yBano,
+	// 						CLASSROOM_WIDTH,
+	// 						BANO_HEIGHT
+	// 					);
+	// 					elementos.banos.push({
+	// 						nivel: "Secundaria",
+	// 						corners: banoData.corners,
+	// 						realCorners: banoData.realCorners,
+	// 					});
+	// 					currentYSecundaria += BANO_HEIGHT;
+	// 				}
+	// 			}
+	// 		}
+
+	// 		// ✅ AULAS DE PRIMARIA EN PABELLÓN SECUNDARIA (si el pabellón estaba vacío)
+	// 		if (
+	// 			floorData.primariaEnPabellonSecundaria &&
+	// 			floorData.primariaEnPabellonSecundaria > 0
+	// 		) {
+	// 			for (
+	// 				let i = 0;
+	// 				i < floorData.primariaEnPabellonSecundaria;
+	// 				i++
+	// 			) {
+	// 				const x =
+	// 					origin.east +
+	// 					dirX.east * (rectWidth - CLASSROOM_WIDTH) +
+	// 					dirY.east * currentYSecundaria;
+	// 				const y =
+	// 					origin.north +
+	// 					dirX.north * (rectWidth - CLASSROOM_WIDTH) +
+	// 					dirY.north * currentYSecundaria;
+
+	// 				const aulaData = createRoomCorners(
+	// 					x,
+	// 					y,
+	// 					CLASSROOM_WIDTH,
+	// 					CLASSROOM_HEIGHT
+	// 				);
+	// 				elementos.primaria.push({
+	// 					corners: aulaData.corners,
+	// 					realCorners: aulaData.realCorners,
+	// 				});
+	// 				currentYSecundaria += CLASSROOM_HEIGHT;
+	// 			}
+	// 		}
+
+	// 		// Ambientes en pabellón secundaria
+	// 		const ambientesSecundariaEnPabellon =
+	// 			distribution.ambientesEnPabellones.filter(
+	// 				(a) => a.pabellon === "secundaria"
+	// 			);
+
+	// 		if (
+	// 			ambientesSecundariaEnPabellon.length > 0 &&
+	// 			currentFloor === 1 &&
+	// 			floorData.secundaria > 0
+	// 		) {
+	// 			ambientesSecundariaEnPabellon.forEach((ambiente) => {
+	// 				const x =
+	// 					origin.east +
+	// 					dirX.east * (rectWidth - CLASSROOM_WIDTH) +
+	// 					dirY.east * currentYSecundaria;
+	// 				const y =
+	// 					origin.north +
+	// 					dirX.north * (rectWidth - CLASSROOM_WIDTH) +
+	// 					dirY.north * currentYSecundaria;
+
+	// 				const ambienteData = createRoomCorners(
+	// 					x,
+	// 					y,
+	// 					ambiente.ancho,
+	// 					ambiente.alto
+	// 				);
+	// 				elementos.ambientes.push({
+	// 					nombre: ambiente.nombre,
+	// 					tipo: "pabellon",
+	// 					corners: ambienteData.corners,
+	// 					realCorners: ambienteData.realCorners,
+	// 				});
+	// 				currentYSecundaria += ambiente.alto;
+	// 			});
+	// 		}
+
+	// 		// Ambientes en espacio libre de secundaria
+	// 		if (
+	// 			floorData.ambientesSecundariaLibre &&
+	// 			floorData.ambientesSecundariaLibre.length > 0
+	// 		) {
+	// 			floorData.ambientesSecundariaLibre.forEach((ambiente) => {
+	// 				const x =
+	// 					origin.east +
+	// 					dirX.east * (rectWidth - CLASSROOM_WIDTH) +
+	// 					dirY.east * currentYSecundaria;
+	// 				const y =
+	// 					origin.north +
+	// 					dirX.north * (rectWidth - CLASSROOM_WIDTH) +
+	// 					dirY.north * currentYSecundaria;
+
+	// 				const ambienteData = createRoomCorners(
+	// 					x,
+	// 					y,
+	// 					ambiente.ancho,
+	// 					ambiente.alto
+	// 				);
+	// 				elementos.ambientes.push({
+	// 					nombre: ambiente.nombre,
+	// 					tipo: "pabellon_libre",
+	// 					corners: ambienteData.corners,
+	// 					realCorners: ambienteData.realCorners,
+	// 				});
+	// 				currentYSecundaria += ambiente.alto;
+	// 			});
+	// 		}
+
+	// 		// ✅ Ambientes reubicados en pabellón secundaria
+	// 		if (
+	// 			floorData.ambientesReubicadosSecundaria &&
+	// 			floorData.ambientesReubicadosSecundaria.length > 0 &&
+	// 			currentFloor === 1
+	// 		) {
+	// 			console.log(
+	// 				`🎨 Renderizando ${floorData.ambientesReubicadosSecundaria.length} ambientes reubicados en secundaria`
+	// 			);
+
+	// 			floorData.ambientesReubicadosSecundaria.forEach((ambiente) => {
+	// 				const x =
+	// 					origin.east +
+	// 					dirX.east * (rectWidth - CLASSROOM_WIDTH) +
+	// 					dirY.east * currentYSecundaria;
+	// 				const y =
+	// 					origin.north +
+	// 					dirX.north * (rectWidth - CLASSROOM_WIDTH) +
+	// 					dirY.north * currentYSecundaria;
+
+	// 				const ambienteData = createRoomCorners(
+	// 					x,
+	// 					y,
+	// 					ambiente.ancho,
+	// 					ambiente.alto
+	// 				);
+	// 				elementos.ambientes.push({
+	// 					nombre: ambiente.nombre,
+	// 					tipo: "reubicado",
+	// 					corners: ambienteData.corners,
+	// 					realCorners: ambienteData.realCorners,
+	// 				});
+	// 				currentYSecundaria += ambiente.alto;
+	// 				console.log(
+	// 					`  ✅ ${
+	// 						ambiente.nombre
+	// 					} renderizado en Y: ${currentYSecundaria.toFixed(1)}`
+	// 				);
+	// 			});
+	// 		}
+	// 	}
+	// };
+
+	// const renderLayoutVertical = (
+	// 	floorData,
+	// 	origin,
+	// 	dirX,
+	// 	dirY,
+	// 	rectWidth,
+	// 	rectHeight,
+	// 	createRoomCorners,
+	// 	elementos
+	// ) => {
+	// 	// ========================================
+	// 	// AMBIENTES SUPERIORES + ENTRADA (derecha, vertical)
+	// 	// ========================================
+	// 	if (
+	// 		currentFloor === 1 &&
+	// 		floorData.ambientesSuperiores &&
+	// 		floorData.ambientesSuperiores.length > 0
+	// 	) {
+	// 		const totalAmbientes = floorData.ambientesSuperiores.length;
+	// 		const totalAmbientesHeight = floorData.ambientesSuperiores.reduce(
+	// 			(sum, amb) => sum + amb.alto,
+	// 			0
+	// 		);
+
+	// 		const posicionEntrada = Math.floor(totalAmbientes / 2);
+	// 		const totalHeight = totalAmbientesHeight + ENTRADA_WIDTH;
+	// 		const startYAmbientes = (rectHeight - totalHeight) / 2;
+
+	// 		let currentYAmbiente = startYAmbientes;
+
+	// 		// Ambientes ANTES de la entrada
+	// 		floorData.ambientesSuperiores
+	// 			.slice(0, posicionEntrada)
+	// 			.forEach((ambiente) => {
+	// 				const x =
+	// 					origin.east +
+	// 					dirX.east * (rectWidth - ambiente.ancho) +
+	// 					dirY.east * currentYAmbiente;
+	// 				const y =
+	// 					origin.north +
+	// 					dirX.north * (rectWidth - ambiente.ancho) +
+	// 					dirY.north * currentYAmbiente;
+
+	// 				const ambienteData = createRoomCorners(
+	// 					x,
+	// 					y,
+	// 					ambiente.ancho,
+	// 					ambiente.alto
+	// 				);
+	// 				elementos.ambientes.push({
+	// 					nombre: ambiente.nombre,
+	// 					tipo: "superior",
+	// 					corners: ambienteData.corners,
+	// 					realCorners: ambienteData.realCorners,
+	// 				});
+	// 				currentYAmbiente += ambiente.alto;
+	// 			});
+
+	// 		// ENTRADA (rotada)
+	// 		const xEnt =
+	// 			origin.east +
+	// 			dirX.east * (rectWidth - CLASSROOM_HEIGHT) +
+	// 			dirY.east * currentYAmbiente;
+	// 		const yEnt =
+	// 			origin.north +
+	// 			dirX.north * (rectWidth - CLASSROOM_HEIGHT) +
+	// 			dirY.north * currentYAmbiente;
+
+	// 		const entradaData = createRoomCorners(
+	// 			xEnt,
+	// 			yEnt,
+	// 			CLASSROOM_HEIGHT,
+	// 			ENTRADA_WIDTH
+	// 		);
+	// 		elementos.entrada = {
+	// 			corners: entradaData.corners,
+	// 			realCorners: entradaData.realCorners,
+	// 		};
+	// 		currentYAmbiente += ENTRADA_WIDTH;
+
+	// 		// Ambientes DESPUÉS de la entrada
+	// 		floorData.ambientesSuperiores
+	// 			.slice(posicionEntrada)
+	// 			.forEach((ambiente) => {
+	// 				const x =
+	// 					origin.east +
+	// 					dirX.east * (rectWidth - ambiente.ancho) +
+	// 					dirY.east * currentYAmbiente;
+	// 				const y =
+	// 					origin.north +
+	// 					dirX.north * (rectWidth - ambiente.ancho) +
+	// 					dirY.north * currentYAmbiente;
+
+	// 				const ambienteData = createRoomCorners(
+	// 					x,
+	// 					y,
+	// 					ambiente.ancho,
+	// 					ambiente.alto
+	// 				);
+	// 				elementos.ambientes.push({
+	// 					nombre: ambiente.nombre,
+	// 					tipo: "superior",
+	// 					corners: ambienteData.corners,
+	// 					realCorners: ambienteData.realCorners,
+	// 				});
+	// 				currentYAmbiente += ambiente.alto;
+	// 			});
+	// 	} else if (
+	// 		currentFloor === 2 &&
+	// 		floorData.ambientesSuperiores &&
+	// 		floorData.ambientesSuperiores.length > 0
+	// 	) {
+	// 		// Piso 2: solo ambientes
+	// 		const totalAmbientesHeight = floorData.ambientesSuperiores.reduce(
+	// 			(sum, amb) => sum + amb.alto,
+	// 			0
+	// 		);
+	// 		const startYAmbientes = (rectHeight - totalAmbientesHeight) / 2;
+	// 		let currentYAmbiente = startYAmbientes;
+
+	// 		floorData.ambientesSuperiores.forEach((ambiente) => {
+	// 			const x =
+	// 				origin.east +
+	// 				dirX.east * (rectWidth - ambiente.ancho) +
+	// 				dirY.east * currentYAmbiente;
+	// 			const y =
+	// 				origin.north +
+	// 				dirX.north * (rectWidth - ambiente.ancho) +
+	// 				dirY.north * currentYAmbiente;
+
+	// 			const ambienteData = createRoomCorners(
+	// 				x,
+	// 				y,
+	// 				ambiente.ancho,
+	// 				ambiente.alto
+	// 			);
+	// 			elementos.ambientes.push({
+	// 				nombre: ambiente.nombre,
+	// 				tipo: "superior",
+	// 				corners: ambienteData.corners,
+	// 				realCorners: ambienteData.realCorners,
+	// 			});
+	// 			currentYAmbiente += ambiente.alto;
+	// 		});
+	// 	}
+
+	// 	// ========================================
+	// 	// PABELLÓN PRIMARIA (abajo, horizontal)
+	// 	// ========================================
+	// 	let currentXPrimaria = CIRCULACION_LATERAL;
+
+	// 	// Solo renderizar si hay aulas O aulas adicionales O ambientes reubicados
+	// 	if (
+	// 		floorData.primaria > 0 ||
+	// 		(floorData.secundariaEnPabellonPrimaria &&
+	// 			floorData.secundariaEnPabellonPrimaria > 0) ||
+	// 		(floorData.ambientesReubicadosPrimaria &&
+	// 			floorData.ambientesReubicadosPrimaria.length > 0)
+	// 	) {
+	// 		// Renderizar aulas normales de primaria
+	// 		for (let i = 0; i < floorData.primaria; i++) {
+	// 			const x = origin.east + dirX.east * currentXPrimaria;
+	// 			const y = origin.north + dirX.north * currentXPrimaria;
+
+	// 			const aulaData = createRoomCorners(
+	// 				x,
+	// 				y,
+	// 				CLASSROOM_WIDTH,
+	// 				CLASSROOM_HEIGHT
+	// 			);
+	// 			elementos.primaria.push({
+	// 				corners: aulaData.corners,
+	// 				realCorners: aulaData.realCorners,
+	// 			});
+	// 			currentXPrimaria += CLASSROOM_WIDTH;
+
+	// 			if (i === 0 && floorData.primaria > 0 && totalFloors > 1) {
+	// 				// Escalera
+	// 				const xEsc = origin.east + dirX.east * currentXPrimaria;
+	// 				const yEsc = origin.north + dirX.north * currentXPrimaria;
+
+	// 				const escaleraData = createRoomCorners(
+	// 					xEsc,
+	// 					yEsc,
+	// 					ESCALERA_WIDTH,
+	// 					ESCALERA_HEIGHT
+	// 				);
+	// 				elementos.escaleras.push({
+	// 					nivel: "Primaria",
+	// 					corners: escaleraData.corners,
+	// 					realCorners: escaleraData.realCorners,
+	// 				});
+	// 				currentXPrimaria += ESCALERA_WIDTH;
+
+	// 				// Baño (solo piso 1)
+	// 				if (currentFloor === 1) {
+	// 					const xBano =
+	// 						origin.east + dirX.east * currentXPrimaria;
+	// 					const yBano =
+	// 						origin.north + dirX.north * currentXPrimaria;
+
+	// 					const banoData = createRoomCorners(
+	// 						xBano,
+	// 						yBano,
+	// 						BANO_WIDTH,
+	// 						BANO_HEIGHT
+	// 					);
+	// 					elementos.banos.push({
+	// 						nivel: "Primaria",
+	// 						corners: banoData.corners,
+	// 						realCorners: banoData.realCorners,
+	// 					});
+	// 					currentXPrimaria += BANO_WIDTH;
+	// 				}
+	// 			}
+	// 		}
+
+	// 		// ✅ AULAS DE SECUNDARIA EN PABELLÓN PRIMARIA (si el pabellón estaba vacío)
+	// 		if (
+	// 			floorData.secundariaEnPabellonPrimaria &&
+	// 			floorData.secundariaEnPabellonPrimaria > 0
+	// 		) {
+	// 			console.log(
+	// 				`🎨 Renderizando ${floorData.secundariaEnPabellonPrimaria} aulas de secundaria en pabellón primaria (VERTICAL)`
+	// 			);
+
+	// 			for (
+	// 				let i = 0;
+	// 				i < floorData.secundariaEnPabellonPrimaria;
+	// 				i++
+	// 			) {
+	// 				const x = origin.east + dirX.east * currentXPrimaria;
+	// 				const y = origin.north + dirX.north * currentXPrimaria;
+
+	// 				const aulaData = createRoomCorners(
+	// 					x,
+	// 					y,
+	// 					CLASSROOM_WIDTH,
+	// 					CLASSROOM_HEIGHT
+	// 				);
+	// 				elementos.secundaria.push({
+	// 					corners: aulaData.corners,
+	// 					realCorners: aulaData.realCorners,
+	// 				});
+	// 				currentXPrimaria += CLASSROOM_WIDTH;
+	// 				console.log(
+	// 					`  ✅ Aula secundaria ${i + 1} en pabellón primaria`
+	// 				);
+	// 			}
+	// 		}
+
+	// 		// Ambientes en pabellón primaria
+	// 		const ambientesPrimariaEnPabellon =
+	// 			distribution.ambientesEnPabellones.filter(
+	// 				(a) => a.pabellon === "primaria"
+	// 			);
+
+	// 		if (
+	// 			ambientesPrimariaEnPabellon.length > 0 &&
+	// 			currentFloor === 1 &&
+	// 			floorData.primaria > 0
+	// 		) {
+	// 			ambientesPrimariaEnPabellon.forEach((ambiente) => {
+	// 				const x = origin.east + dirX.east * currentXPrimaria;
+	// 				const y = origin.north + dirX.north * currentXPrimaria;
+
+	// 				const ambienteData = createRoomCorners(
+	// 					x,
+	// 					y,
+	// 					ambiente.ancho,
+	// 					ambiente.alto
+	// 				);
+	// 				elementos.ambientes.push({
+	// 					nombre: ambiente.nombre,
+	// 					tipo: "pabellon",
+	// 					corners: ambienteData.corners,
+	// 					realCorners: ambienteData.realCorners,
+	// 				});
+	// 				currentXPrimaria += ambiente.ancho;
+	// 			});
+	// 		}
+
+	// 		// Ambientes en espacio libre de primaria
+	// 		if (
+	// 			floorData.ambientesPrimariaLibre &&
+	// 			floorData.ambientesPrimariaLibre.length > 0
+	// 		) {
+	// 			floorData.ambientesPrimariaLibre.forEach((ambiente) => {
+	// 				const x = origin.east + dirX.east * currentXPrimaria;
+	// 				const y = origin.north + dirX.north * currentXPrimaria;
+
+	// 				const ambienteData = createRoomCorners(
+	// 					x,
+	// 					y,
+	// 					ambiente.ancho,
+	// 					ambiente.alto
+	// 				);
+	// 				elementos.ambientes.push({
+	// 					nombre: ambiente.nombre,
+	// 					tipo: "pabellon_libre",
+	// 					corners: ambienteData.corners,
+	// 					realCorners: ambienteData.realCorners,
+	// 				});
+	// 				currentXPrimaria += ambiente.ancho;
+	// 			});
+	// 		}
+
+	// 		// ✅ Ambientes reubicados en pabellón primaria
+	// 		if (
+	// 			floorData.ambientesReubicadosPrimaria &&
+	// 			floorData.ambientesReubicadosPrimaria.length > 0 &&
+	// 			currentFloor === 1
+	// 		) {
+	// 			console.log(
+	// 				`🎨 Renderizando ${floorData.ambientesReubicadosPrimaria.length} ambientes reubicados en primaria (VERTICAL)`
+	// 			);
+
+	// 			floorData.ambientesReubicadosPrimaria.forEach((ambiente) => {
+	// 				const x = origin.east + dirX.east * currentXPrimaria;
+	// 				const y = origin.north + dirX.north * currentXPrimaria;
+
+	// 				const ambienteData = createRoomCorners(
+	// 					x,
+	// 					y,
+	// 					ambiente.ancho,
+	// 					ambiente.alto
+	// 				);
+	// 				elementos.ambientes.push({
+	// 					nombre: ambiente.nombre,
+	// 					tipo: "reubicado",
+	// 					corners: ambienteData.corners,
+	// 					realCorners: ambienteData.realCorners,
+	// 				});
+	// 				currentXPrimaria += ambiente.ancho;
+	// 				console.log(
+	// 					`  ✅ ${
+	// 						ambiente.nombre
+	// 					} renderizado en X: ${currentXPrimaria.toFixed(1)}`
+	// 				);
+	// 			});
+	// 		}
+	// 	}
+
+	// 	// ========================================
+	// 	// PABELLÓN SECUNDARIA (arriba, horizontal)
+	// 	// ========================================
+	// 	let currentXSecundaria = CIRCULACION_LATERAL;
+
+	// 	// Solo renderizar si hay aulas O aulas adicionales O ambientes reubicados
+	// 	if (
+	// 		floorData.secundaria > 0 ||
+	// 		(floorData.primariaEnPabellonSecundaria &&
+	// 			floorData.primariaEnPabellonSecundaria > 0) ||
+	// 		(floorData.ambientesReubicadosSecundaria &&
+	// 			floorData.ambientesReubicadosSecundaria.length > 0)
+	// 	) {
+	// 		// Renderizar aulas normales de secundaria
+	// 		for (let i = 0; i < floorData.secundaria; i++) {
+	// 			const x =
+	// 				origin.east +
+	// 				dirX.east * currentXSecundaria +
+	// 				dirY.east * (rectHeight - CLASSROOM_HEIGHT);
+	// 			const y =
+	// 				origin.north +
+	// 				dirX.north * currentXSecundaria +
+	// 				dirY.north * (rectHeight - CLASSROOM_HEIGHT);
+
+	// 			const aulaData = createRoomCorners(
+	// 				x,
+	// 				y,
+	// 				CLASSROOM_WIDTH,
+	// 				CLASSROOM_HEIGHT
+	// 			);
+	// 			elementos.secundaria.push({
+	// 				corners: aulaData.corners,
+	// 				realCorners: aulaData.realCorners,
+	// 			});
+	// 			currentXSecundaria += CLASSROOM_WIDTH;
+
+	// 			if (i === 0 && floorData.secundaria > 0 && totalFloors > 1) {
+	// 				// Escalera
+	// 				const xEsc =
+	// 					origin.east +
+	// 					dirX.east * currentXSecundaria +
+	// 					dirY.east * (rectHeight - CLASSROOM_HEIGHT);
+	// 				const yEsc =
+	// 					origin.north +
+	// 					dirX.north * currentXSecundaria +
+	// 					dirY.north * (rectHeight - CLASSROOM_HEIGHT);
+
+	// 				const escaleraData = createRoomCorners(
+	// 					xEsc,
+	// 					yEsc,
+	// 					ESCALERA_WIDTH,
+	// 					ESCALERA_HEIGHT
+	// 				);
+	// 				elementos.escaleras.push({
+	// 					nivel: "Secundaria",
+	// 					corners: escaleraData.corners,
+	// 					realCorners: escaleraData.realCorners,
+	// 				});
+	// 				currentXSecundaria += ESCALERA_WIDTH;
+
+	// 				// Baño (solo piso 1)
+	// 				if (currentFloor === 1) {
+	// 					const xBano =
+	// 						origin.east +
+	// 						dirX.east * currentXSecundaria +
+	// 						dirY.east * (rectHeight - CLASSROOM_HEIGHT);
+	// 					const yBano =
+	// 						origin.north +
+	// 						dirX.north * currentXSecundaria +
+	// 						dirY.north * (rectHeight - CLASSROOM_HEIGHT);
+
+	// 					const banoData = createRoomCorners(
+	// 						xBano,
+	// 						yBano,
+	// 						BANO_WIDTH,
+	// 						BANO_HEIGHT
+	// 					);
+	// 					elementos.banos.push({
+	// 						nivel: "Secundaria",
+	// 						corners: banoData.corners,
+	// 						realCorners: banoData.realCorners,
+	// 					});
+	// 					currentXSecundaria += BANO_WIDTH;
+	// 				}
+	// 			}
+	// 		}
+
+	// 		// ✅ AULAS DE PRIMARIA EN PABELLÓN SECUNDARIA (si el pabellón estaba vacío)
+	// 		if (
+	// 			floorData.primariaEnPabellonSecundaria &&
+	// 			floorData.primariaEnPabellonSecundaria > 0
+	// 		) {
+	// 			console.log(
+	// 				`🎨 Renderizando ${floorData.primariaEnPabellonSecundaria} aulas de primaria en pabellón secundaria (VERTICAL)`
+	// 			);
+
+	// 			for (
+	// 				let i = 0;
+	// 				i < floorData.primariaEnPabellonSecundaria;
+	// 				i++
+	// 			) {
+	// 				const x =
+	// 					origin.east +
+	// 					dirX.east * currentXSecundaria +
+	// 					dirY.east * (rectHeight - CLASSROOM_HEIGHT);
+	// 				const y =
+	// 					origin.north +
+	// 					dirX.north * currentXSecundaria +
+	// 					dirY.north * (rectHeight - CLASSROOM_HEIGHT);
+
+	// 				const aulaData = createRoomCorners(
+	// 					x,
+	// 					y,
+	// 					CLASSROOM_WIDTH,
+	// 					CLASSROOM_HEIGHT
+	// 				);
+	// 				elementos.primaria.push({
+	// 					corners: aulaData.corners,
+	// 					realCorners: aulaData.realCorners,
+	// 				});
+	// 				currentXSecundaria += CLASSROOM_WIDTH;
+	// 				console.log(
+	// 					`  ✅ Aula primaria ${i + 1} en pabellón secundaria`
+	// 				);
+	// 			}
+	// 		}
+
+	// 		// Ambientes en pabellón secundaria
+	// 		const ambientesSecundariaEnPabellon =
+	// 			distribution.ambientesEnPabellones.filter(
+	// 				(a) => a.pabellon === "secundaria"
+	// 			);
+
+	// 		if (
+	// 			ambientesSecundariaEnPabellon.length > 0 &&
+	// 			currentFloor === 1 &&
+	// 			floorData.secundaria > 0
+	// 		) {
+	// 			ambientesSecundariaEnPabellon.forEach((ambiente) => {
+	// 				const x =
+	// 					origin.east +
+	// 					dirX.east * currentXSecundaria +
+	// 					dirY.east * (rectHeight - CLASSROOM_HEIGHT);
+	// 				const y =
+	// 					origin.north +
+	// 					dirX.north * currentXSecundaria +
+	// 					dirY.north * (rectHeight - CLASSROOM_HEIGHT);
+
+	// 				const ambienteData = createRoomCorners(
+	// 					x,
+	// 					y,
+	// 					ambiente.ancho,
+	// 					ambiente.alto
+	// 				);
+	// 				elementos.ambientes.push({
+	// 					nombre: ambiente.nombre,
+	// 					tipo: "pabellon",
+	// 					corners: ambienteData.corners,
+	// 					realCorners: ambienteData.realCorners,
+	// 				});
+	// 				currentXSecundaria += ambiente.ancho;
+	// 			});
+	// 		}
+
+	// 		// Ambientes en espacio libre de secundaria
+	// 		if (
+	// 			floorData.ambientesSecundariaLibre &&
+	// 			floorData.ambientesSecundariaLibre.length > 0
+	// 		) {
+	// 			floorData.ambientesSecundariaLibre.forEach((ambiente) => {
+	// 				const x =
+	// 					origin.east +
+	// 					dirX.east * currentXSecundaria +
+	// 					dirY.east * (rectHeight - CLASSROOM_HEIGHT);
+	// 				const y =
+	// 					origin.north +
+	// 					dirX.north * currentXSecundaria +
+	// 					dirY.north * (rectHeight - CLASSROOM_HEIGHT);
+
+	// 				const ambienteData = createRoomCorners(
+	// 					x,
+	// 					y,
+	// 					ambiente.ancho,
+	// 					ambiente.alto
+	// 				);
+	// 				elementos.ambientes.push({
+	// 					nombre: ambiente.nombre,
+	// 					tipo: "pabellon_libre",
+	// 					corners: ambienteData.corners,
+	// 					realCorners: ambienteData.realCorners,
+	// 				});
+	// 				currentXSecundaria += ambiente.ancho;
+	// 			});
+	// 		}
+
+	// 		// ✅ Ambientes reubicados en pabellón secundaria
+	// 		if (
+	// 			floorData.ambientesReubicadosSecundaria &&
+	// 			floorData.ambientesReubicadosSecundaria.length > 0 &&
+	// 			currentFloor === 1
+	// 		) {
+	// 			console.log(
+	// 				`🎨 Renderizando ${floorData.ambientesReubicadosSecundaria.length} ambientes reubicados en secundaria (VERTICAL)`
+	// 			);
+
+	// 			floorData.ambientesReubicadosSecundaria.forEach((ambiente) => {
+	// 				const x =
+	// 					origin.east +
+	// 					dirX.east * currentXSecundaria +
+	// 					dirY.east * (rectHeight - CLASSROOM_HEIGHT);
+	// 				const y =
+	// 					origin.north +
+	// 					dirX.north * currentXSecundaria +
+	// 					dirY.north * (rectHeight - CLASSROOM_HEIGHT);
+
+	// 				const ambienteData = createRoomCorners(
+	// 					x,
+	// 					y,
+	// 					ambiente.ancho,
+	// 					ambiente.alto
+	// 				);
+	// 				elementos.ambientes.push({
+	// 					nombre: ambiente.nombre,
+	// 					tipo: "reubicado",
+	// 					corners: ambienteData.corners,
+	// 					realCorners: ambienteData.realCorners,
+	// 				});
+	// 				currentXSecundaria += ambiente.ancho;
+	// 				console.log(
+	// 					`  ✅ ${
+	// 						ambiente.nombre
+	// 					} renderizado en X: ${currentXSecundaria.toFixed(1)}`
+	// 				);
+	// 			});
+	// 		}
+	// 	}
+
+	// 	// ========================================
+	// 	// PABELLÓN INICIAL (izquierda, vertical)
+	// 	// ========================================
+
+	// 	const pabellonIzquierdaColor =
+	// 		distribution.pabellonInferiorEs === "primaria"
+	// 			? "primaria"
+	// 			: distribution.pabellonInferiorEs === "secundaria"
+	// 			? "secundaria"
+	// 			: "inicial";
+
+	// 	// ✅ CALCULAR ALTO TOTAL DEL PABELLÓN INICIAL
+	// 	let altoTotalInicial = floorData.inicial * CLASSROOM_HEIGHT;
+
+	// 	// Agregar escalera y baño si hay más de un piso
+	// 	if (floorData.inicial > 0 && totalFloors > 1) {
+	// 		altoTotalInicial += ESCALERA_HEIGHT;
+	// 		if (currentFloor === 1) {
+	// 			altoTotalInicial += BANO_HEIGHT;
+	// 		}
+	// 	}
+
+	// 	// Agregar psicomotricidad si existe
+	// 	const psicomotricidadEnInicial =
+	// 		distribution.ambientesEnPabellones.find(
+	// 			(a) => a.pabellon === "inicial"
+	// 		);
+	// 	if (
+	// 		psicomotricidadEnInicial &&
+	// 		currentFloor === 1 &&
+	// 		floorData.inicial > 0
+	// 	) {
+	// 		altoTotalInicial += psicomotricidadEnInicial.alto;
+	// 	}
+
+	// 	// Agregar ambientes libres
+	// 	if (
+	// 		floorData.ambientesInicialLibre &&
+	// 		floorData.ambientesInicialLibre.length > 0
+	// 	) {
+	// 		floorData.ambientesInicialLibre.forEach((ambiente) => {
+	// 			altoTotalInicial += ambiente.alto;
+	// 		});
+	// 	}
+
+	// 	// ✅ CENTRAR EN EL RECTÁNGULO
+	// 	const startYInicial = CLASSROOM_HEIGHT + CIRCULACION_ENTRE_PABELLONES;
+	// 	const espacioDisponibleInicial =
+	// 		rectHeight -
+	// 		CLASSROOM_HEIGHT * 2 -
+	// 		CIRCULACION_ENTRE_PABELLONES * 2;
+	// 	let currentYInicial =
+	// 		startYInicial + (espacioDisponibleInicial - altoTotalInicial) / 2;
+
+	// 	// Renderizar aulas
+	// 	for (let i = 0; i < floorData.inicial; i++) {
+	// 		const x = origin.east + dirY.east * currentYInicial;
+	// 		const y = origin.north + dirY.north * currentYInicial;
+
+	// 		const aulaData = createRoomCorners(
+	// 			x,
+	// 			y,
+	// 			CLASSROOM_WIDTH,
+	// 			CLASSROOM_HEIGHT
+	// 		);
+
+	// 		if (pabellonIzquierdaColor === "inicial") {
+	// 			elementos.inicial.push({
+	// 				corners: aulaData.corners,
+	// 				realCorners: aulaData.realCorners,
+	// 			});
+	// 		} else if (pabellonIzquierdaColor === "primaria") {
+	// 			elementos.primaria.push({
+	// 				corners: aulaData.corners,
+	// 				realCorners: aulaData.realCorners,
+	// 			});
+	// 		} else if (pabellonIzquierdaColor === "secundaria") {
+	// 			elementos.secundaria.push({
+	// 				corners: aulaData.corners,
+	// 				realCorners: aulaData.realCorners,
+	// 			});
+	// 		}
+
+	// 		currentYInicial += CLASSROOM_HEIGHT;
+
+	// 		// Escalera y baño después de la primera aula
+	// 		if (i === 0 && floorData.inicial > 0 && totalFloors > 1) {
+	// 			// Escalera
+	// 			const xEsc = origin.east + dirY.east * currentYInicial;
+	// 			const yEsc = origin.north + dirY.north * currentYInicial;
+
+	// 			const escaleraData = createRoomCorners(
+	// 				xEsc,
+	// 				yEsc,
+	// 				CLASSROOM_WIDTH,
+	// 				ESCALERA_HEIGHT
+	// 			);
+	// 			elementos.escaleras.push({
+	// 				nivel: "Inicial",
+	// 				corners: escaleraData.corners,
+	// 				realCorners: escaleraData.realCorners,
+	// 			});
+	// 			currentYInicial += ESCALERA_HEIGHT;
+
+	// 			// Baño (solo piso 1)
+	// 			if (currentFloor === 1) {
+	// 				const xBano = origin.east + dirY.east * currentYInicial;
+	// 				const yBano = origin.north + dirY.north * currentYInicial;
+
+	// 				const banoData = createRoomCorners(
+	// 					xBano,
+	// 					yBano,
+	// 					CLASSROOM_WIDTH,
+	// 					BANO_HEIGHT
+	// 				);
+	// 				elementos.banos.push({
+	// 					nivel: "Inicial",
+	// 					corners: banoData.corners,
+	// 					realCorners: banoData.realCorners,
+	// 				});
+	// 				currentYInicial += BANO_HEIGHT;
+	// 			}
+	// 		}
+	// 	}
+
+	// 	// Psicomotricidad
+	// 	if (
+	// 		psicomotricidadEnInicial &&
+	// 		currentFloor === 1 &&
+	// 		floorData.inicial > 0
+	// 	) {
+	// 		const x = origin.east + dirY.east * currentYInicial;
+	// 		const y = origin.north + dirY.north * currentYInicial;
+
+	// 		const psicomotricidadData = createRoomCorners(
+	// 			x,
+	// 			y,
+	// 			psicomotricidadEnInicial.ancho,
+	// 			psicomotricidadEnInicial.alto
+	// 		);
+	// 		elementos.ambientes.push({
+	// 			nombre: psicomotricidadEnInicial.nombre,
+	// 			tipo: "pabellon",
+	// 			corners: psicomotricidadData.corners,
+	// 			realCorners: psicomotricidadData.realCorners,
+	// 		});
+	// 		currentYInicial += psicomotricidadEnInicial.alto;
+	// 	}
+
+	// 	// Ambientes libres
+	// 	if (
+	// 		floorData.ambientesInicialLibre &&
+	// 		floorData.ambientesInicialLibre.length > 0
+	// 	) {
+	// 		floorData.ambientesInicialLibre.forEach((ambiente) => {
+	// 			const x = origin.east + dirY.east * currentYInicial;
+	// 			const y = origin.north + dirY.north * currentYInicial;
+
+	// 			const ambienteData = createRoomCorners(
+	// 				x,
+	// 				y,
+	// 				ambiente.ancho,
+	// 				ambiente.alto
+	// 			);
+	// 			elementos.ambientes.push({
+	// 				nombre: ambiente.nombre,
+	// 				tipo: "pabellon_libre",
+	// 				corners: ambienteData.corners,
+	// 				realCorners: ambienteData.realCorners,
+	// 			});
+	// 			currentYInicial += ambiente.alto;
+	// 		});
+	// 	}
+	// };
 
 	const renderLayoutHorizontal = (
 		floorData,
@@ -4403,9 +6493,11 @@ EOF
 		// ✅ CALCULAR ANCHO TOTAL DEL PABELLÓN INICIAL
 		let anchoTotalInicial = floorData.inicial * CLASSROOM_WIDTH;
 
-		// Agregar escalera y baño si hay más de un piso
-		if (floorData.inicial > 0 && totalFloors > 1) {
-			anchoTotalInicial += ESCALERA_WIDTH;
+		// Agregar escalera y baño
+		if (floorData.inicial > 0) {
+			if (totalFloors > 1) {
+				anchoTotalInicial += ESCALERA_WIDTH;
+			}
 			if (currentFloor === 1) {
 				anchoTotalInicial += BANO_WIDTH;
 			}
@@ -4441,12 +6533,6 @@ EOF
 			CIRCULACION_LATERAL +
 			(espacioDisponibleInicial - anchoTotalInicial) / 2;
 
-		// console.log("📍 Inicial centrado:", {
-		// 	anchoTotal: anchoTotalInicial.toFixed(1),
-		// 	espacioDisponible: espacioDisponibleInicial.toFixed(1),
-		// 	posicionInicio: currentXInicial.toFixed(1),
-		// });
-
 		// Renderizar aulas
 		for (let i = 0; i < floorData.inicial; i++) {
 			const x = origin.east + dirX.east * currentXInicial;
@@ -4479,25 +6565,27 @@ EOF
 			currentXInicial += CLASSROOM_WIDTH;
 
 			// Escalera y baño después de la primera aula
-			if (i === 0 && floorData.inicial > 0 && totalFloors > 1) {
-				// Escalera
-				const xEsc = origin.east + dirX.east * currentXInicial;
-				const yEsc = origin.north + dirX.north * currentXInicial;
+			if (i === 0 && floorData.inicial > 0) {
+				// ✅ ESCALERA: solo si hay más de un piso
+				if (totalFloors > 1) {
+					const xEsc = origin.east + dirX.east * currentXInicial;
+					const yEsc = origin.north + dirX.north * currentXInicial;
 
-				const escaleraData = createRoomCorners(
-					xEsc,
-					yEsc,
-					ESCALERA_WIDTH,
-					ESCALERA_HEIGHT
-				);
-				elementos.escaleras.push({
-					nivel: "Inicial",
-					corners: escaleraData.corners,
-					realCorners: escaleraData.realCorners,
-				});
-				currentXInicial += ESCALERA_WIDTH;
+					const escaleraData = createRoomCorners(
+						xEsc,
+						yEsc,
+						ESCALERA_WIDTH,
+						ESCALERA_HEIGHT
+					);
+					elementos.escaleras.push({
+						nivel: "Inicial",
+						corners: escaleraData.corners,
+						realCorners: escaleraData.realCorners,
+					});
+					currentXInicial += ESCALERA_WIDTH;
+				}
 
-				// Baño (solo piso 1)
+				// ✅ BAÑO: siempre en piso 1
 				if (currentFloor === 1) {
 					const xBano = origin.east + dirX.east * currentXInicial;
 					const yBano = origin.north + dirX.north * currentXInicial;
@@ -4566,121 +6654,202 @@ EOF
 				currentXInicial += ambiente.ancho;
 			});
 		}
+
 		// ========================================
 		// PABELLÓN PRIMARIA (izquierda, vertical)
 		// ========================================
 		const startYPrimaria = CLASSROOM_HEIGHT + CIRCULACION_ENTRE_PABELLONES;
 		let currentYPrimaria = startYPrimaria;
 
-		for (let i = 0; i < floorData.primaria; i++) {
-			const x = origin.east + dirY.east * currentYPrimaria;
-			const y = origin.north + dirY.north * currentYPrimaria;
+		// Solo renderizar si hay aulas O aulas adicionales O ambientes reubicados
+		if (
+			floorData.primaria > 0 ||
+			(floorData.secundariaEnPabellonPrimaria &&
+				floorData.secundariaEnPabellonPrimaria > 0) ||
+			(floorData.ambientesReubicadosPrimaria &&
+				floorData.ambientesReubicadosPrimaria.length > 0)
+		) {
+			// Renderizar aulas normales de primaria
+			for (let i = 0; i < floorData.primaria; i++) {
+				const x = origin.east + dirY.east * currentYPrimaria;
+				const y = origin.north + dirY.north * currentYPrimaria;
 
-			const aulaData = createRoomCorners(
-				x,
-				y,
-				CLASSROOM_WIDTH,
-				CLASSROOM_HEIGHT
-			);
-			elementos.primaria.push({
-				corners: aulaData.corners,
-				realCorners: aulaData.realCorners,
-			});
-			currentYPrimaria += CLASSROOM_HEIGHT;
-
-			if (i === 0 && floorData.primaria > 0 && totalFloors > 1) {
-				// Escalera
-				const xEsc = origin.east + dirY.east * currentYPrimaria;
-				const yEsc = origin.north + dirY.north * currentYPrimaria;
-
-				const escaleraData = createRoomCorners(
-					xEsc,
-					yEsc,
+				const aulaData = createRoomCorners(
+					x,
+					y,
 					CLASSROOM_WIDTH,
-					ESCALERA_HEIGHT
+					CLASSROOM_HEIGHT
 				);
-				elementos.escaleras.push({
-					nivel: "Primaria",
-					corners: escaleraData.corners,
-					realCorners: escaleraData.realCorners,
+				elementos.primaria.push({
+					corners: aulaData.corners,
+					realCorners: aulaData.realCorners,
 				});
-				currentYPrimaria += ESCALERA_HEIGHT;
+				currentYPrimaria += CLASSROOM_HEIGHT;
 
-				// Baño (solo piso 1)
-				if (currentFloor === 1) {
-					const xBano = origin.east + dirY.east * currentYPrimaria;
-					const yBano = origin.north + dirY.north * currentYPrimaria;
+				if (i === 0 && floorData.primaria > 0) {
+					// ✅ ESCALERA: solo si hay más de un piso
+					if (totalFloors > 1) {
+						const xEsc = origin.east + dirY.east * currentYPrimaria;
+						const yEsc =
+							origin.north + dirY.north * currentYPrimaria;
 
-					const banoData = createRoomCorners(
-						xBano,
-						yBano,
-						CLASSROOM_WIDTH,
-						BANO_HEIGHT
-					);
-					elementos.banos.push({
-						nivel: "Primaria",
-						corners: banoData.corners,
-						realCorners: banoData.realCorners,
-					});
-					currentYPrimaria += BANO_HEIGHT;
+						const escaleraData = createRoomCorners(
+							xEsc,
+							yEsc,
+							CLASSROOM_WIDTH,
+							ESCALERA_HEIGHT
+						);
+						elementos.escaleras.push({
+							nivel: "Primaria",
+							corners: escaleraData.corners,
+							realCorners: escaleraData.realCorners,
+						});
+						currentYPrimaria += ESCALERA_HEIGHT;
+					}
+
+					// ✅ BAÑO: siempre en piso 1
+					if (currentFloor === 1) {
+						const xBano =
+							origin.east + dirY.east * currentYPrimaria;
+						const yBano =
+							origin.north + dirY.north * currentYPrimaria;
+
+						const banoData = createRoomCorners(
+							xBano,
+							yBano,
+							CLASSROOM_WIDTH,
+							BANO_HEIGHT
+						);
+						elementos.banos.push({
+							nivel: "Primaria",
+							corners: banoData.corners,
+							realCorners: banoData.realCorners,
+						});
+						currentYPrimaria += BANO_HEIGHT;
+					}
 				}
 			}
-		}
 
-		// Ambientes en pabellón primaria
-		const ambientesPrimariaEnPabellon =
-			distribution.ambientesEnPabellones.filter(
-				(a) => a.pabellon === "primaria"
-			);
-
-		if (
-			ambientesPrimariaEnPabellon.length > 0 &&
-			currentFloor === 1 &&
-			floorData.primaria > 0
-		) {
-			ambientesPrimariaEnPabellon.forEach((ambiente) => {
-				const x = origin.east + dirY.east * currentYPrimaria;
-				const y = origin.north + dirY.north * currentYPrimaria;
-
-				const ambienteData = createRoomCorners(
-					x,
-					y,
-					ambiente.ancho,
-					ambiente.alto
+			// ✅ AULAS DE SECUNDARIA EN PABELLÓN PRIMARIA (si el pabellón estaba vacío)
+			if (
+				floorData.secundariaEnPabellonPrimaria &&
+				floorData.secundariaEnPabellonPrimaria > 0
+			) {
+				console.log(
+					`🎨 Renderizando ${floorData.secundariaEnPabellonPrimaria} aulas de secundaria en pabellón primaria`
 				);
-				elementos.ambientes.push({
-					nombre: ambiente.nombre,
-					tipo: "pabellon",
-					corners: ambienteData.corners,
-					realCorners: ambienteData.realCorners,
-				});
-				currentYPrimaria += ambiente.alto;
-			});
-		}
 
-		// Ambientes en espacio libre de primaria
-		if (
-			floorData.ambientesPrimariaLibre &&
-			floorData.ambientesPrimariaLibre.length > 0
-		) {
-			floorData.ambientesPrimariaLibre.forEach((ambiente) => {
-				const x = origin.east + dirY.east * currentYPrimaria;
-				const y = origin.north + dirY.north * currentYPrimaria;
+				for (
+					let i = 0;
+					i < floorData.secundariaEnPabellonPrimaria;
+					i++
+				) {
+					const x = origin.east + dirY.east * currentYPrimaria;
+					const y = origin.north + dirY.north * currentYPrimaria;
 
-				const ambienteData = createRoomCorners(
-					x,
-					y,
-					ambiente.ancho,
-					ambiente.alto
+					const aulaData = createRoomCorners(
+						x,
+						y,
+						CLASSROOM_WIDTH,
+						CLASSROOM_HEIGHT
+					);
+					elementos.secundaria.push({
+						corners: aulaData.corners,
+						realCorners: aulaData.realCorners,
+					});
+					currentYPrimaria += CLASSROOM_HEIGHT;
+					console.log(
+						`  ✅ Aula secundaria ${i + 1} en pabellón primaria`
+					);
+				}
+			}
+
+			// ✅ AMBIENTES EN PABELLÓN PRIMARIA: Renderizar SIEMPRE si existen
+			const ambientesPrimariaEnPabellon =
+				distribution.ambientesEnPabellones.filter(
+					(a) => a.pabellon === "primaria"
 				);
-				elementos.ambientes.push({
-					nombre: ambiente.nombre,
-					tipo: "pabellon_libre",
-					corners: ambienteData.corners,
-					realCorners: ambienteData.realCorners,
+
+			if (ambientesPrimariaEnPabellon.length > 0 && currentFloor === 1) {
+				ambientesPrimariaEnPabellon.forEach((ambiente) => {
+					const x = origin.east + dirY.east * currentYPrimaria;
+					const y = origin.north + dirY.north * currentYPrimaria;
+
+					const ambienteData = createRoomCorners(
+						x,
+						y,
+						ambiente.ancho,
+						ambiente.alto
+					);
+					elementos.ambientes.push({
+						nombre: ambiente.nombre,
+						tipo: "pabellon",
+						corners: ambienteData.corners,
+						realCorners: ambienteData.realCorners,
+					});
+					currentYPrimaria += ambiente.alto;
 				});
-				currentYPrimaria += ambiente.alto;
-			});
+			}
+
+			// Ambientes en espacio libre de primaria
+			if (
+				floorData.ambientesPrimariaLibre &&
+				floorData.ambientesPrimariaLibre.length > 0
+			) {
+				floorData.ambientesPrimariaLibre.forEach((ambiente) => {
+					const x = origin.east + dirY.east * currentYPrimaria;
+					const y = origin.north + dirY.north * currentYPrimaria;
+
+					const ambienteData = createRoomCorners(
+						x,
+						y,
+						ambiente.ancho,
+						ambiente.alto
+					);
+					elementos.ambientes.push({
+						nombre: ambiente.nombre,
+						tipo: "pabellon_libre",
+						corners: ambienteData.corners,
+						realCorners: ambienteData.realCorners,
+					});
+					currentYPrimaria += ambiente.alto;
+				});
+			}
+
+			// ✅ Ambientes reubicados en pabellón primaria
+			if (
+				floorData.ambientesReubicadosPrimaria &&
+				floorData.ambientesReubicadosPrimaria.length > 0 &&
+				currentFloor === 1
+			) {
+				console.log(
+					`🎨 Renderizando ${floorData.ambientesReubicadosPrimaria.length} ambientes reubicados en primaria`
+				);
+
+				floorData.ambientesReubicadosPrimaria.forEach((ambiente) => {
+					const x = origin.east + dirY.east * currentYPrimaria;
+					const y = origin.north + dirY.north * currentYPrimaria;
+
+					const ambienteData = createRoomCorners(
+						x,
+						y,
+						ambiente.ancho,
+						ambiente.alto
+					);
+					elementos.ambientes.push({
+						nombre: ambiente.nombre,
+						tipo: "reubicado",
+						corners: ambienteData.corners,
+						realCorners: ambienteData.realCorners,
+					});
+					currentYPrimaria += ambiente.alto;
+					console.log(
+						`  ✅ ${
+							ambiente.nombre
+						} renderizado en Y: ${currentYPrimaria.toFixed(1)}`
+					);
+				});
+			}
 		}
 
 		// ========================================
@@ -4688,147 +6857,1003 @@ EOF
 		// ========================================
 		let currentYSecundaria = startYPrimaria;
 
-		for (let i = 0; i < floorData.secundaria; i++) {
-			const x =
-				origin.east +
-				dirX.east * (rectWidth - CLASSROOM_WIDTH) +
-				dirY.east * currentYSecundaria;
-			const y =
-				origin.north +
-				dirX.north * (rectWidth - CLASSROOM_WIDTH) +
-				dirY.north * currentYSecundaria;
-
-			const aulaData = createRoomCorners(
-				x,
-				y,
-				CLASSROOM_WIDTH,
-				CLASSROOM_HEIGHT
-			);
-			elementos.secundaria.push({
-				corners: aulaData.corners,
-				realCorners: aulaData.realCorners,
-			});
-			currentYSecundaria += CLASSROOM_HEIGHT;
-
-			if (i === 0 && floorData.secundaria > 0 && totalFloors > 1) {
-				// Escalera
-				const xEsc =
+		// Solo renderizar si hay aulas O aulas adicionales O ambientes reubicados
+		if (
+			floorData.secundaria > 0 ||
+			(floorData.primariaEnPabellonSecundaria &&
+				floorData.primariaEnPabellonSecundaria > 0) ||
+			(floorData.ambientesReubicadosSecundaria &&
+				floorData.ambientesReubicadosSecundaria.length > 0)
+		) {
+			// Renderizar aulas normales de secundaria
+			for (let i = 0; i < floorData.secundaria; i++) {
+				const x =
 					origin.east +
 					dirX.east * (rectWidth - CLASSROOM_WIDTH) +
 					dirY.east * currentYSecundaria;
-				const yEsc =
+				const y =
 					origin.north +
 					dirX.north * (rectWidth - CLASSROOM_WIDTH) +
 					dirY.north * currentYSecundaria;
 
-				const escaleraData = createRoomCorners(
-					xEsc,
-					yEsc,
+				const aulaData = createRoomCorners(
+					x,
+					y,
 					CLASSROOM_WIDTH,
-					ESCALERA_HEIGHT
+					CLASSROOM_HEIGHT
 				);
-				elementos.escaleras.push({
-					nivel: "Secundaria",
-					corners: escaleraData.corners,
-					realCorners: escaleraData.realCorners,
+				elementos.secundaria.push({
+					corners: aulaData.corners,
+					realCorners: aulaData.realCorners,
 				});
-				currentYSecundaria += ESCALERA_HEIGHT;
+				currentYSecundaria += CLASSROOM_HEIGHT;
 
-				// Baño (solo piso 1)
-				if (currentFloor === 1) {
-					const xBano =
+				if (i === 0 && floorData.secundaria > 0) {
+					// ✅ ESCALERA: solo si hay más de un piso
+					if (totalFloors > 1) {
+						const xEsc =
+							origin.east +
+							dirX.east * (rectWidth - CLASSROOM_WIDTH) +
+							dirY.east * currentYSecundaria;
+						const yEsc =
+							origin.north +
+							dirX.north * (rectWidth - CLASSROOM_WIDTH) +
+							dirY.north * currentYSecundaria;
+
+						const escaleraData = createRoomCorners(
+							xEsc,
+							yEsc,
+							CLASSROOM_WIDTH,
+							ESCALERA_HEIGHT
+						);
+						elementos.escaleras.push({
+							nivel: "Secundaria",
+							corners: escaleraData.corners,
+							realCorners: escaleraData.realCorners,
+						});
+						currentYSecundaria += ESCALERA_HEIGHT;
+					}
+
+					// ✅ BAÑO: siempre en piso 1
+					if (currentFloor === 1) {
+						const xBano =
+							origin.east +
+							dirX.east * (rectWidth - CLASSROOM_WIDTH) +
+							dirY.east * currentYSecundaria;
+						const yBano =
+							origin.north +
+							dirX.north * (rectWidth - CLASSROOM_WIDTH) +
+							dirY.north * currentYSecundaria;
+
+						const banoData = createRoomCorners(
+							xBano,
+							yBano,
+							CLASSROOM_WIDTH,
+							BANO_HEIGHT
+						);
+						elementos.banos.push({
+							nivel: "Secundaria",
+							corners: banoData.corners,
+							realCorners: banoData.realCorners,
+						});
+						currentYSecundaria += BANO_HEIGHT;
+					}
+				}
+			}
+
+			// ✅ AULAS DE PRIMARIA EN PABELLÓN SECUNDARIA (si el pabellón estaba vacío)
+			if (
+				floorData.primariaEnPabellonSecundaria &&
+				floorData.primariaEnPabellonSecundaria > 0
+			) {
+				console.log(
+					`🎨 Renderizando ${floorData.primariaEnPabellonSecundaria} aulas de primaria en pabellón secundaria`
+				);
+
+				for (
+					let i = 0;
+					i < floorData.primariaEnPabellonSecundaria;
+					i++
+				) {
+					const x =
 						origin.east +
 						dirX.east * (rectWidth - CLASSROOM_WIDTH) +
 						dirY.east * currentYSecundaria;
-					const yBano =
+					const y =
 						origin.north +
 						dirX.north * (rectWidth - CLASSROOM_WIDTH) +
 						dirY.north * currentYSecundaria;
 
-					const banoData = createRoomCorners(
-						xBano,
-						yBano,
+					const aulaData = createRoomCorners(
+						x,
+						y,
 						CLASSROOM_WIDTH,
-						BANO_HEIGHT
+						CLASSROOM_HEIGHT
 					);
-					elementos.banos.push({
-						nivel: "Secundaria",
-						corners: banoData.corners,
-						realCorners: banoData.realCorners,
+					elementos.primaria.push({
+						corners: aulaData.corners,
+						realCorners: aulaData.realCorners,
 					});
-					currentYSecundaria += BANO_HEIGHT;
+					currentYSecundaria += CLASSROOM_HEIGHT;
+					console.log(
+						`  ✅ Aula primaria ${i + 1} en pabellón secundaria`
+					);
 				}
 			}
-		}
 
-		// Ambientes en pabellón secundaria
-		const ambientesSecundariaEnPabellon =
-			distribution.ambientesEnPabellones.filter(
-				(a) => a.pabellon === "secundaria"
-			);
-
-		if (
-			ambientesSecundariaEnPabellon.length > 0 &&
-			currentFloor === 1 &&
-			floorData.secundaria > 0
-		) {
-			ambientesSecundariaEnPabellon.forEach((ambiente) => {
-				const x =
-					origin.east +
-					dirX.east * (rectWidth - CLASSROOM_WIDTH) +
-					dirY.east * currentYSecundaria;
-				const y =
-					origin.north +
-					dirX.north * (rectWidth - CLASSROOM_WIDTH) +
-					dirY.north * currentYSecundaria;
-
-				const ambienteData = createRoomCorners(
-					x,
-					y,
-					ambiente.ancho,
-					ambiente.alto
+			// ✅ AMBIENTES EN PABELLÓN SECUNDARIA: Renderizar SIEMPRE si existen
+			const ambientesSecundariaEnPabellon =
+				distribution.ambientesEnPabellones.filter(
+					(a) => a.pabellon === "secundaria"
 				);
-				elementos.ambientes.push({
-					nombre: ambiente.nombre,
-					tipo: "pabellon",
-					corners: ambienteData.corners,
-					realCorners: ambienteData.realCorners,
+
+			if (
+				ambientesSecundariaEnPabellon.length > 0 &&
+				currentFloor === 1
+			) {
+				ambientesSecundariaEnPabellon.forEach((ambiente) => {
+					const x =
+						origin.east +
+						dirX.east * (rectWidth - CLASSROOM_WIDTH) +
+						dirY.east * currentYSecundaria;
+					const y =
+						origin.north +
+						dirX.north * (rectWidth - CLASSROOM_WIDTH) +
+						dirY.north * currentYSecundaria;
+
+					const ambienteData = createRoomCorners(
+						x,
+						y,
+						ambiente.ancho,
+						ambiente.alto
+					);
+					elementos.ambientes.push({
+						nombre: ambiente.nombre,
+						tipo: "pabellon",
+						corners: ambienteData.corners,
+						realCorners: ambienteData.realCorners,
+					});
+					currentYSecundaria += ambiente.alto;
 				});
-				currentYSecundaria += ambiente.alto;
-			});
-		}
+			}
 
-		// Ambientes en espacio libre de secundaria
-		if (
-			floorData.ambientesSecundariaLibre &&
-			floorData.ambientesSecundariaLibre.length > 0
-		) {
-			floorData.ambientesSecundariaLibre.forEach((ambiente) => {
-				const x =
-					origin.east +
-					dirX.east * (rectWidth - CLASSROOM_WIDTH) +
-					dirY.east * currentYSecundaria;
-				const y =
-					origin.north +
-					dirX.north * (rectWidth - CLASSROOM_WIDTH) +
-					dirY.north * currentYSecundaria;
+			// Ambientes en espacio libre de secundaria
+			if (
+				floorData.ambientesSecundariaLibre &&
+				floorData.ambientesSecundariaLibre.length > 0
+			) {
+				floorData.ambientesSecundariaLibre.forEach((ambiente) => {
+					const x =
+						origin.east +
+						dirX.east * (rectWidth - CLASSROOM_WIDTH) +
+						dirY.east * currentYSecundaria;
+					const y =
+						origin.north +
+						dirX.north * (rectWidth - CLASSROOM_WIDTH) +
+						dirY.north * currentYSecundaria;
 
-				const ambienteData = createRoomCorners(
-					x,
-					y,
-					ambiente.ancho,
-					ambiente.alto
+					const ambienteData = createRoomCorners(
+						x,
+						y,
+						ambiente.ancho,
+						ambiente.alto
+					);
+					elementos.ambientes.push({
+						nombre: ambiente.nombre,
+						tipo: "pabellon_libre",
+						corners: ambienteData.corners,
+						realCorners: ambienteData.realCorners,
+					});
+					currentYSecundaria += ambiente.alto;
+				});
+			}
+
+			// ✅ Ambientes reubicados en pabellón secundaria
+			if (
+				floorData.ambientesReubicadosSecundaria &&
+				floorData.ambientesReubicadosSecundaria.length > 0 &&
+				currentFloor === 1
+			) {
+				console.log(
+					`🎨 Renderizando ${floorData.ambientesReubicadosSecundaria.length} ambientes reubicados en secundaria`
 				);
-				elementos.ambientes.push({
-					nombre: ambiente.nombre,
-					tipo: "pabellon_libre",
-					corners: ambienteData.corners,
-					realCorners: ambienteData.realCorners,
+
+				floorData.ambientesReubicadosSecundaria.forEach((ambiente) => {
+					const x =
+						origin.east +
+						dirX.east * (rectWidth - CLASSROOM_WIDTH) +
+						dirY.east * currentYSecundaria;
+					const y =
+						origin.north +
+						dirX.north * (rectWidth - CLASSROOM_WIDTH) +
+						dirY.north * currentYSecundaria;
+
+					const ambienteData = createRoomCorners(
+						x,
+						y,
+						ambiente.ancho,
+						ambiente.alto
+					);
+					elementos.ambientes.push({
+						nombre: ambiente.nombre,
+						tipo: "reubicado",
+						corners: ambienteData.corners,
+						realCorners: ambienteData.realCorners,
+					});
+					currentYSecundaria += ambiente.alto;
+					console.log(
+						`  ✅ ${
+							ambiente.nombre
+						} renderizado en Y: ${currentYSecundaria.toFixed(1)}`
+					);
 				});
-				currentYSecundaria += ambiente.alto;
-			});
+			}
 		}
 	};
+
+	// const renderLayoutVertical = (
+	// 	floorData,
+	// 	origin,
+	// 	dirX,
+	// 	dirY,
+	// 	rectWidth,
+	// 	rectHeight,
+	// 	createRoomCorners,
+	// 	elementos
+	// ) => {
+	// 	// ========================================
+	// 	// AMBIENTES SUPERIORES + ENTRADA (derecha, vertical)
+	// 	// ========================================
+	// 	if (
+	// 		currentFloor === 1 &&
+	// 		floorData.ambientesSuperiores &&
+	// 		floorData.ambientesSuperiores.length > 0
+	// 	) {
+	// 		const totalAmbientes = floorData.ambientesSuperiores.length;
+	// 		const totalAmbientesHeight = floorData.ambientesSuperiores.reduce(
+	// 			(sum, amb) => sum + amb.alto,
+	// 			0
+	// 		);
+
+	// 		const posicionEntrada = Math.floor(totalAmbientes / 2);
+	// 		const totalHeight = totalAmbientesHeight + ENTRADA_WIDTH;
+	// 		const startYAmbientes = (rectHeight - totalHeight) / 2;
+
+	// 		let currentYAmbiente = startYAmbientes;
+
+	// 		// Ambientes ANTES de la entrada
+	// 		floorData.ambientesSuperiores
+	// 			.slice(0, posicionEntrada)
+	// 			.forEach((ambiente) => {
+	// 				const x =
+	// 					origin.east +
+	// 					dirX.east * (rectWidth - ambiente.ancho) +
+	// 					dirY.east * currentYAmbiente;
+	// 				const y =
+	// 					origin.north +
+	// 					dirX.north * (rectWidth - ambiente.ancho) +
+	// 					dirY.north * currentYAmbiente;
+
+	// 				const ambienteData = createRoomCorners(
+	// 					x,
+	// 					y,
+	// 					ambiente.ancho,
+	// 					ambiente.alto
+	// 				);
+	// 				elementos.ambientes.push({
+	// 					nombre: ambiente.nombre,
+	// 					tipo: "superior",
+	// 					corners: ambienteData.corners,
+	// 					realCorners: ambienteData.realCorners,
+	// 				});
+	// 				currentYAmbiente += ambiente.alto;
+	// 			});
+
+	// 		// ENTRADA (rotada)
+	// 		const xEnt =
+	// 			origin.east +
+	// 			dirX.east * (rectWidth - CLASSROOM_HEIGHT) +
+	// 			dirY.east * currentYAmbiente;
+	// 		const yEnt =
+	// 			origin.north +
+	// 			dirX.north * (rectWidth - CLASSROOM_HEIGHT) +
+	// 			dirY.north * currentYAmbiente;
+
+	// 		const entradaData = createRoomCorners(
+	// 			xEnt,
+	// 			yEnt,
+	// 			CLASSROOM_HEIGHT,
+	// 			ENTRADA_WIDTH
+	// 		);
+	// 		elementos.entrada = {
+	// 			corners: entradaData.corners,
+	// 			realCorners: entradaData.realCorners,
+	// 		};
+	// 		currentYAmbiente += ENTRADA_WIDTH;
+
+	// 		// Ambientes DESPUÉS de la entrada
+	// 		floorData.ambientesSuperiores
+	// 			.slice(posicionEntrada)
+	// 			.forEach((ambiente) => {
+	// 				const x =
+	// 					origin.east +
+	// 					dirX.east * (rectWidth - ambiente.ancho) +
+	// 					dirY.east * currentYAmbiente;
+	// 				const y =
+	// 					origin.north +
+	// 					dirX.north * (rectWidth - ambiente.ancho) +
+	// 					dirY.north * currentYAmbiente;
+
+	// 				const ambienteData = createRoomCorners(
+	// 					x,
+	// 					y,
+	// 					ambiente.ancho,
+	// 					ambiente.alto
+	// 				);
+	// 				elementos.ambientes.push({
+	// 					nombre: ambiente.nombre,
+	// 					tipo: "superior",
+	// 					corners: ambienteData.corners,
+	// 					realCorners: ambienteData.realCorners,
+	// 				});
+	// 				currentYAmbiente += ambiente.alto;
+	// 			});
+	// 	} else if (
+	// 		currentFloor === 2 &&
+	// 		floorData.ambientesSuperiores &&
+	// 		floorData.ambientesSuperiores.length > 0
+	// 	) {
+	// 		// Piso 2: solo ambientes
+	// 		const totalAmbientesHeight = floorData.ambientesSuperiores.reduce(
+	// 			(sum, amb) => sum + amb.alto,
+	// 			0
+	// 		);
+	// 		const startYAmbientes = (rectHeight - totalAmbientesHeight) / 2;
+	// 		let currentYAmbiente = startYAmbientes;
+
+	// 		floorData.ambientesSuperiores.forEach((ambiente) => {
+	// 			const x =
+	// 				origin.east +
+	// 				dirX.east * (rectWidth - ambiente.ancho) +
+	// 				dirY.east * currentYAmbiente;
+	// 			const y =
+	// 				origin.north +
+	// 				dirX.north * (rectWidth - ambiente.ancho) +
+	// 				dirY.north * currentYAmbiente;
+
+	// 			const ambienteData = createRoomCorners(
+	// 				x,
+	// 				y,
+	// 				ambiente.ancho,
+	// 				ambiente.alto
+	// 			);
+	// 			elementos.ambientes.push({
+	// 				nombre: ambiente.nombre,
+	// 				tipo: "superior",
+	// 				corners: ambienteData.corners,
+	// 				realCorners: ambienteData.realCorners,
+	// 			});
+	// 			currentYAmbiente += ambiente.alto;
+	// 		});
+	// 	}
+
+	// 	// ========================================
+	// 	// PABELLÓN PRIMARIA (abajo, horizontal)
+	// 	// ========================================
+	// 	let currentXPrimaria = CIRCULACION_LATERAL;
+
+	// 	// Solo renderizar si hay aulas O aulas adicionales O ambientes reubicados
+	// 	if (
+	// 		floorData.primaria > 0 ||
+	// 		(floorData.secundariaEnPabellonPrimaria &&
+	// 			floorData.secundariaEnPabellonPrimaria > 0) ||
+	// 		(floorData.ambientesReubicadosPrimaria &&
+	// 			floorData.ambientesReubicadosPrimaria.length > 0)
+	// 	) {
+	// 		// Renderizar aulas normales de primaria
+	// 		for (let i = 0; i < floorData.primaria; i++) {
+	// 			const x = origin.east + dirX.east * currentXPrimaria;
+	// 			const y = origin.north + dirX.north * currentXPrimaria;
+
+	// 			const aulaData = createRoomCorners(
+	// 				x,
+	// 				y,
+	// 				CLASSROOM_WIDTH,
+	// 				CLASSROOM_HEIGHT
+	// 			);
+	// 			elementos.primaria.push({
+	// 				corners: aulaData.corners,
+	// 				realCorners: aulaData.realCorners,
+	// 			});
+	// 			currentXPrimaria += CLASSROOM_WIDTH;
+
+	// 			if (i === 0 && floorData.primaria > 0) {
+	// 				// ✅ ESCALERA: solo si hay más de un piso
+	// 				if (totalFloors > 1) {
+	// 					const xEsc = origin.east + dirX.east * currentXPrimaria;
+	// 					const yEsc =
+	// 						origin.north + dirX.north * currentXPrimaria;
+
+	// 					const escaleraData = createRoomCorners(
+	// 						xEsc,
+	// 						yEsc,
+	// 						ESCALERA_WIDTH,
+	// 						ESCALERA_HEIGHT
+	// 					);
+	// 					elementos.escaleras.push({
+	// 						nivel: "Primaria",
+	// 						corners: escaleraData.corners,
+	// 						realCorners: escaleraData.realCorners,
+	// 					});
+	// 					currentXPrimaria += ESCALERA_WIDTH;
+	// 				}
+
+	// 				// ✅ BAÑO: siempre en piso 1
+	// 				if (currentFloor === 1) {
+	// 					const xBano =
+	// 						origin.east + dirX.east * currentXPrimaria;
+	// 					const yBano =
+	// 						origin.north + dirX.north * currentXPrimaria;
+
+	// 					const banoData = createRoomCorners(
+	// 						xBano,
+	// 						yBano,
+	// 						BANO_WIDTH,
+	// 						BANO_HEIGHT
+	// 					);
+	// 					elementos.banos.push({
+	// 						nivel: "Primaria",
+	// 						corners: banoData.corners,
+	// 						realCorners: banoData.realCorners,
+	// 					});
+	// 					currentXPrimaria += BANO_WIDTH;
+	// 				}
+	// 			}
+	// 		}
+
+	// 		// ✅ AULAS DE SECUNDARIA EN PABELLÓN PRIMARIA (si el pabellón estaba vacío)
+	// 		if (
+	// 			floorData.secundariaEnPabellonPrimaria &&
+	// 			floorData.secundariaEnPabellonPrimaria > 0
+	// 		) {
+	// 			console.log(
+	// 				`🎨 Renderizando ${floorData.secundariaEnPabellonPrimaria} aulas de secundaria en pabellón primaria (VERTICAL)`
+	// 			);
+
+	// 			for (
+	// 				let i = 0;
+	// 				i < floorData.secundariaEnPabellonPrimaria;
+	// 				i++
+	// 			) {
+	// 				const x = origin.east + dirX.east * currentXPrimaria;
+	// 				const y = origin.north + dirX.north * currentXPrimaria;
+
+	// 				const aulaData = createRoomCorners(
+	// 					x,
+	// 					y,
+	// 					CLASSROOM_WIDTH,
+	// 					CLASSROOM_HEIGHT
+	// 				);
+	// 				elementos.secundaria.push({
+	// 					corners: aulaData.corners,
+	// 					realCorners: aulaData.realCorners,
+	// 				});
+	// 				currentXPrimaria += CLASSROOM_WIDTH;
+	// 				console.log(
+	// 					`  ✅ Aula secundaria ${i + 1} en pabellón primaria`
+	// 				);
+	// 			}
+	// 		}
+
+	// 		// Ambientes en pabellón primaria
+	// 		const ambientesPrimariaEnPabellon =
+	// 			distribution.ambientesEnPabellones.filter(
+	// 				(a) => a.pabellon === "primaria"
+	// 			);
+
+	// 		if (
+	// 			ambientesPrimariaEnPabellon.length > 0 &&
+	// 			currentFloor === 1 &&
+	// 			floorData.primaria > 0
+	// 		) {
+	// 			ambientesPrimariaEnPabellon.forEach((ambiente) => {
+	// 				const x = origin.east + dirX.east * currentXPrimaria;
+	// 				const y = origin.north + dirX.north * currentXPrimaria;
+
+	// 				const ambienteData = createRoomCorners(
+	// 					x,
+	// 					y,
+	// 					ambiente.ancho,
+	// 					ambiente.alto
+	// 				);
+	// 				elementos.ambientes.push({
+	// 					nombre: ambiente.nombre,
+	// 					tipo: "pabellon",
+	// 					corners: ambienteData.corners,
+	// 					realCorners: ambienteData.realCorners,
+	// 				});
+	// 				currentXPrimaria += ambiente.ancho;
+	// 			});
+	// 		}
+
+	// 		// Ambientes en espacio libre de primaria
+	// 		if (
+	// 			floorData.ambientesPrimariaLibre &&
+	// 			floorData.ambientesPrimariaLibre.length > 0
+	// 		) {
+	// 			floorData.ambientesPrimariaLibre.forEach((ambiente) => {
+	// 				const x = origin.east + dirX.east * currentXPrimaria;
+	// 				const y = origin.north + dirX.north * currentXPrimaria;
+
+	// 				const ambienteData = createRoomCorners(
+	// 					x,
+	// 					y,
+	// 					ambiente.ancho,
+	// 					ambiente.alto
+	// 				);
+	// 				elementos.ambientes.push({
+	// 					nombre: ambiente.nombre,
+	// 					tipo: "pabellon_libre",
+	// 					corners: ambienteData.corners,
+	// 					realCorners: ambienteData.realCorners,
+	// 				});
+	// 				currentXPrimaria += ambiente.ancho;
+	// 			});
+	// 		}
+
+	// 		// ✅ Ambientes reubicados en pabellón primaria
+	// 		if (
+	// 			floorData.ambientesReubicadosPrimaria &&
+	// 			floorData.ambientesReubicadosPrimaria.length > 0 &&
+	// 			currentFloor === 1
+	// 		) {
+	// 			console.log(
+	// 				`🎨 Renderizando ${floorData.ambientesReubicadosPrimaria.length} ambientes reubicados en primaria (VERTICAL)`
+	// 			);
+
+	// 			floorData.ambientesReubicadosPrimaria.forEach((ambiente) => {
+	// 				const x = origin.east + dirX.east * currentXPrimaria;
+	// 				const y = origin.north + dirX.north * currentXPrimaria;
+
+	// 				const ambienteData = createRoomCorners(
+	// 					x,
+	// 					y,
+	// 					ambiente.ancho,
+	// 					ambiente.alto
+	// 				);
+	// 				elementos.ambientes.push({
+	// 					nombre: ambiente.nombre,
+	// 					tipo: "reubicado",
+	// 					corners: ambienteData.corners,
+	// 					realCorners: ambienteData.realCorners,
+	// 				});
+	// 				currentXPrimaria += ambiente.ancho;
+	// 				console.log(
+	// 					`  ✅ ${
+	// 						ambiente.nombre
+	// 					} renderizado en X: ${currentXPrimaria.toFixed(1)}`
+	// 				);
+	// 			});
+	// 		}
+	// 	}
+
+	// 	// ========================================
+	// 	// PABELLÓN SECUNDARIA (arriba, horizontal)
+	// 	// ========================================
+	// 	let currentXSecundaria = CIRCULACION_LATERAL;
+
+	// 	// Solo renderizar si hay aulas O aulas adicionales O ambientes reubicados
+	// 	if (
+	// 		floorData.secundaria > 0 ||
+	// 		(floorData.primariaEnPabellonSecundaria &&
+	// 			floorData.primariaEnPabellonSecundaria > 0) ||
+	// 		(floorData.ambientesReubicadosSecundaria &&
+	// 			floorData.ambientesReubicadosSecundaria.length > 0)
+	// 	) {
+	// 		// Renderizar aulas normales de secundaria
+	// 		for (let i = 0; i < floorData.secundaria; i++) {
+	// 			const x =
+	// 				origin.east +
+	// 				dirX.east * currentXSecundaria +
+	// 				dirY.east * (rectHeight - CLASSROOM_HEIGHT);
+	// 			const y =
+	// 				origin.north +
+	// 				dirX.north * currentXSecundaria +
+	// 				dirY.north * (rectHeight - CLASSROOM_HEIGHT);
+
+	// 			const aulaData = createRoomCorners(
+	// 				x,
+	// 				y,
+	// 				CLASSROOM_WIDTH,
+	// 				CLASSROOM_HEIGHT
+	// 			);
+	// 			elementos.secundaria.push({
+	// 				corners: aulaData.corners,
+	// 				realCorners: aulaData.realCorners,
+	// 			});
+	// 			currentXSecundaria += CLASSROOM_WIDTH;
+
+	// 			if (i === 0 && floorData.secundaria > 0) {
+	// 				// ✅ ESCALERA: solo si hay más de un piso
+	// 				if (totalFloors > 1) {
+	// 					const xEsc =
+	// 						origin.east +
+	// 						dirX.east * currentXSecundaria +
+	// 						dirY.east * (rectHeight - CLASSROOM_HEIGHT);
+	// 					const yEsc =
+	// 						origin.north +
+	// 						dirX.north * currentXSecundaria +
+	// 						dirY.north * (rectHeight - CLASSROOM_HEIGHT);
+
+	// 					const escaleraData = createRoomCorners(
+	// 						xEsc,
+	// 						yEsc,
+	// 						ESCALERA_WIDTH,
+	// 						ESCALERA_HEIGHT
+	// 					);
+	// 					elementos.escaleras.push({
+	// 						nivel: "Secundaria",
+	// 						corners: escaleraData.corners,
+	// 						realCorners: escaleraData.realCorners,
+	// 					});
+	// 					currentXSecundaria += ESCALERA_WIDTH;
+	// 				}
+
+	// 				// ✅ BAÑO: siempre en piso 1
+	// 				if (currentFloor === 1) {
+	// 					const xBano =
+	// 						origin.east +
+	// 						dirX.east * currentXSecundaria +
+	// 						dirY.east * (rectHeight - CLASSROOM_HEIGHT);
+	// 					const yBano =
+	// 						origin.north +
+	// 						dirX.north * currentXSecundaria +
+	// 						dirY.north * (rectHeight - CLASSROOM_HEIGHT);
+
+	// 					const banoData = createRoomCorners(
+	// 						xBano,
+	// 						yBano,
+	// 						BANO_WIDTH,
+	// 						BANO_HEIGHT
+	// 					);
+	// 					elementos.banos.push({
+	// 						nivel: "Secundaria",
+	// 						corners: banoData.corners,
+	// 						realCorners: banoData.realCorners,
+	// 					});
+	// 					currentXSecundaria += BANO_WIDTH;
+	// 				}
+	// 			}
+	// 		}
+
+	// 		// ✅ AULAS DE PRIMARIA EN PABELLÓN SECUNDARIA (si el pabellón estaba vacío)
+	// 		if (
+	// 			floorData.primariaEnPabellonSecundaria &&
+	// 			floorData.primariaEnPabellonSecundaria > 0
+	// 		) {
+	// 			console.log(
+	// 				`🎨 Renderizando ${floorData.primariaEnPabellonSecundaria} aulas de primaria en pabellón secundaria (VERTICAL)`
+	// 			);
+
+	// 			for (
+	// 				let i = 0;
+	// 				i < floorData.primariaEnPabellonSecundaria;
+	// 				i++
+	// 			) {
+	// 				const x =
+	// 					origin.east +
+	// 					dirX.east * currentXSecundaria +
+	// 					dirY.east * (rectHeight - CLASSROOM_HEIGHT);
+	// 				const y =
+	// 					origin.north +
+	// 					dirX.north * currentXSecundaria +
+	// 					dirY.north * (rectHeight - CLASSROOM_HEIGHT);
+
+	// 				const aulaData = createRoomCorners(
+	// 					x,
+	// 					y,
+	// 					CLASSROOM_WIDTH,
+	// 					CLASSROOM_HEIGHT
+	// 				);
+	// 				elementos.primaria.push({
+	// 					corners: aulaData.corners,
+	// 					realCorners: aulaData.realCorners,
+	// 				});
+	// 				currentXSecundaria += CLASSROOM_WIDTH;
+	// 				console.log(
+	// 					`  ✅ Aula primaria ${i + 1} en pabellón secundaria`
+	// 				);
+	// 			}
+	// 		}
+
+	// 		// Ambientes en pabellón secundaria
+	// 		const ambientesSecundariaEnPabellon =
+	// 			distribution.ambientesEnPabellones.filter(
+	// 				(a) => a.pabellon === "secundaria"
+	// 			);
+
+	// 		if (
+	// 			ambientesSecundariaEnPabellon.length > 0 &&
+	// 			currentFloor === 1 &&
+	// 			floorData.secundaria > 0
+	// 		) {
+	// 			ambientesSecundariaEnPabellon.forEach((ambiente) => {
+	// 				const x =
+	// 					origin.east +
+	// 					dirX.east * currentXSecundaria +
+	// 					dirY.east * (rectHeight - CLASSROOM_HEIGHT);
+	// 				const y =
+	// 					origin.north +
+	// 					dirX.north * currentXSecundaria +
+	// 					dirY.north * (rectHeight - CLASSROOM_HEIGHT);
+
+	// 				const ambienteData = createRoomCorners(
+	// 					x,
+	// 					y,
+	// 					ambiente.ancho,
+	// 					ambiente.alto
+	// 				);
+	// 				elementos.ambientes.push({
+	// 					nombre: ambiente.nombre,
+	// 					tipo: "pabellon",
+	// 					corners: ambienteData.corners,
+	// 					realCorners: ambienteData.realCorners,
+	// 				});
+	// 				currentXSecundaria += ambiente.ancho;
+	// 			});
+	// 		}
+
+	// 		// Ambientes en espacio libre de secundaria
+	// 		if (
+	// 			floorData.ambientesSecundariaLibre &&
+	// 			floorData.ambientesSecundariaLibre.length > 0
+	// 		) {
+	// 			floorData.ambientesSecundariaLibre.forEach((ambiente) => {
+	// 				const x =
+	// 					origin.east +
+	// 					dirX.east * currentXSecundaria +
+	// 					dirY.east * (rectHeight - CLASSROOM_HEIGHT);
+	// 				const y =
+	// 					origin.north +
+	// 					dirX.north * currentXSecundaria +
+	// 					dirY.north * (rectHeight - CLASSROOM_HEIGHT);
+
+	// 				const ambienteData = createRoomCorners(
+	// 					x,
+	// 					y,
+	// 					ambiente.ancho,
+	// 					ambiente.alto
+	// 				);
+	// 				elementos.ambientes.push({
+	// 					nombre: ambiente.nombre,
+	// 					tipo: "pabellon_libre",
+	// 					corners: ambienteData.corners,
+	// 					realCorners: ambienteData.realCorners,
+	// 				});
+	// 				currentXSecundaria += ambiente.ancho;
+	// 			});
+	// 		}
+
+	// 		// ✅ Ambientes reubicados en pabellón secundaria
+	// 		if (
+	// 			floorData.ambientesReubicadosSecundaria &&
+	// 			floorData.ambientesReubicadosSecundaria.length > 0 &&
+	// 			currentFloor === 1
+	// 		) {
+	// 			console.log(
+	// 				`🎨 Renderizando ${floorData.ambientesReubicadosSecundaria.length} ambientes reubicados en secundaria (VERTICAL)`
+	// 			);
+
+	// 			floorData.ambientesReubicadosSecundaria.forEach((ambiente) => {
+	// 				const x =
+	// 					origin.east +
+	// 					dirX.east * currentXSecundaria +
+	// 					dirY.east * (rectHeight - CLASSROOM_HEIGHT);
+	// 				const y =
+	// 					origin.north +
+	// 					dirX.north * currentXSecundaria +
+	// 					dirY.north * (rectHeight - CLASSROOM_HEIGHT);
+
+	// 				const ambienteData = createRoomCorners(
+	// 					x,
+	// 					y,
+	// 					ambiente.ancho,
+	// 					ambiente.alto
+	// 				);
+	// 				elementos.ambientes.push({
+	// 					nombre: ambiente.nombre,
+	// 					tipo: "reubicado",
+	// 					corners: ambienteData.corners,
+	// 					realCorners: ambienteData.realCorners,
+	// 				});
+	// 				currentXSecundaria += ambiente.ancho;
+	// 				console.log(
+	// 					`  ✅ ${
+	// 						ambiente.nombre
+	// 					} renderizado en X: ${currentXSecundaria.toFixed(1)}`
+	// 				);
+	// 			});
+	// 		}
+	// 	}
+
+	// 	// ========================================
+	// 	// PABELLÓN INICIAL (izquierda, vertical)
+	// 	// ========================================
+
+	// 	const pabellonIzquierdaColor =
+	// 		distribution.pabellonInferiorEs === "primaria"
+	// 			? "primaria"
+	// 			: distribution.pabellonInferiorEs === "secundaria"
+	// 			? "secundaria"
+	// 			: "inicial";
+
+	// 	// ✅ CALCULAR ALTO TOTAL DEL PABELLÓN INICIAL
+	// 	let altoTotalInicial = floorData.inicial * CLASSROOM_HEIGHT;
+
+	// 	// Agregar escalera y baño
+	// 	if (floorData.inicial > 0) {
+	// 		if (totalFloors > 1) {
+	// 			altoTotalInicial += ESCALERA_HEIGHT;
+	// 		}
+	// 		if (currentFloor === 1) {
+	// 			altoTotalInicial += BANO_HEIGHT;
+	// 		}
+	// 	}
+
+	// 	// Agregar psicomotricidad si existe
+	// 	const psicomotricidadEnInicial =
+	// 		distribution.ambientesEnPabellones.find(
+	// 			(a) => a.pabellon === "inicial"
+	// 		);
+	// 	if (
+	// 		psicomotricidadEnInicial &&
+	// 		currentFloor === 1 &&
+	// 		floorData.inicial > 0
+	// 	) {
+	// 		altoTotalInicial += psicomotricidadEnInicial.alto;
+	// 	}
+
+	// 	// Agregar ambientes libres
+	// 	if (
+	// 		floorData.ambientesInicialLibre &&
+	// 		floorData.ambientesInicialLibre.length > 0
+	// 	) {
+	// 		floorData.ambientesInicialLibre.forEach((ambiente) => {
+	// 			altoTotalInicial += ambiente.alto;
+	// 		});
+	// 	}
+
+	// 	// ✅ CENTRAR EN EL RECTÁNGULO
+	// 	const startYInicial = CLASSROOM_HEIGHT + CIRCULACION_ENTRE_PABELLONES;
+	// 	const espacioDisponibleInicial =
+	// 		rectHeight -
+	// 		CLASSROOM_HEIGHT * 2 -
+	// 		CIRCULACION_ENTRE_PABELLONES * 2;
+	// 	let currentYInicial =
+	// 		startYInicial + (espacioDisponibleInicial - altoTotalInicial) / 2;
+
+	// 	// Renderizar aulas
+	// 	for (let i = 0; i < floorData.inicial; i++) {
+	// 		const x = origin.east + dirY.east * currentYInicial;
+	// 		const y = origin.north + dirY.north * currentYInicial;
+
+	// 		const aulaData = createRoomCorners(
+	// 			x,
+	// 			y,
+	// 			CLASSROOM_WIDTH,
+	// 			CLASSROOM_HEIGHT
+	// 		);
+
+	// 		if (pabellonIzquierdaColor === "inicial") {
+	// 			elementos.inicial.push({
+	// 				corners: aulaData.corners,
+	// 				realCorners: aulaData.realCorners,
+	// 			});
+	// 		} else if (pabellonIzquierdaColor === "primaria") {
+	// 			elementos.primaria.push({
+	// 				corners: aulaData.corners,
+	// 				realCorners: aulaData.realCorners,
+	// 			});
+	// 		} else if (pabellonIzquierdaColor === "secundaria") {
+	// 			elementos.secundaria.push({
+	// 				corners: aulaData.corners,
+	// 				realCorners: aulaData.realCorners,
+	// 			});
+	// 		}
+
+	// 		currentYInicial += CLASSROOM_HEIGHT;
+
+	// 		// Escalera y baño después de la primera aula
+	// 		if (i === 0 && floorData.inicial > 0) {
+	// 			// ✅ ESCALERA: solo si hay más de un piso
+	// 			if (totalFloors > 1) {
+	// 				const xEsc = origin.east + dirY.east * currentYInicial;
+	// 				const yEsc = origin.north + dirY.north * currentYInicial;
+
+	// 				const escaleraData = createRoomCorners(
+	// 					xEsc,
+	// 					yEsc,
+	// 					CLASSROOM_WIDTH,
+	// 					ESCALERA_HEIGHT
+	// 				);
+	// 				elementos.escaleras.push({
+	// 					nivel: "Inicial",
+	// 					corners: escaleraData.corners,
+	// 					realCorners: escaleraData.realCorners,
+	// 				});
+	// 				currentYInicial += ESCALERA_HEIGHT;
+	// 			}
+
+	// 			// ✅ BAÑO: siempre en piso 1
+	// 			if (currentFloor === 1) {
+	// 				const xBano = origin.east + dirY.east * currentYInicial;
+	// 				const yBano = origin.north + dirY.north * currentYInicial;
+
+	// 				const banoData = createRoomCorners(
+	// 					xBano,
+	// 					yBano,
+	// 					CLASSROOM_WIDTH,
+	// 					BANO_HEIGHT
+	// 				);
+	// 				elementos.banos.push({
+	// 					nivel: "Inicial",
+	// 					corners: banoData.corners,
+	// 					realCorners: banoData.realCorners,
+	// 				});
+	// 				currentYInicial += BANO_HEIGHT;
+	// 			}
+	// 		}
+	// 	}
+
+	// 	// Psicomotricidad
+	// 	if (
+	// 		psicomotricidadEnInicial &&
+	// 		currentFloor === 1 &&
+	// 		floorData.inicial > 0
+	// 	) {
+	// 		const x = origin.east + dirY.east * currentYInicial;
+	// 		const y = origin.north + dirY.north * currentYInicial;
+
+	// 		const psicomotricidadData = createRoomCorners(
+	// 			x,
+	// 			y,
+	// 			psicomotricidadEnInicial.ancho,
+	// 			psicomotricidadEnInicial.alto
+	// 		);
+	// 		elementos.ambientes.push({
+	// 			nombre: psicomotricidadEnInicial.nombre,
+	// 			tipo: "pabellon",
+	// 			corners: psicomotricidadData.corners,
+	// 			realCorners: psicomotricidadData.realCorners,
+	// 		});
+	// 		currentYInicial += psicomotricidadEnInicial.alto;
+	// 	}
+
+	// 	// Ambientes libres
+	// 	if (
+	// 		floorData.ambientesInicialLibre &&
+	// 		floorData.ambientesInicialLibre.length > 0
+	// 	) {
+	// 		floorData.ambientesInicialLibre.forEach((ambiente) => {
+	// 			const x = origin.east + dirY.east * currentYInicial;
+	// 			const y = origin.north + dirY.north * currentYInicial;
+
+	// 			const ambienteData = createRoomCorners(
+	// 				x,
+	// 				y,
+	// 				ambiente.ancho,
+	// 				ambiente.alto
+	// 			);
+	// 			elementos.ambientes.push({
+	// 				nombre: ambiente.nombre,
+	// 				tipo: "pabellon_libre",
+	// 				corners: ambienteData.corners,
+	// 				realCorners: ambienteData.realCorners,
+	// 			});
+	// 			currentYInicial += ambiente.alto;
+	// 		});
+	// 	}
+	// };
 
 	const renderLayoutVertical = (
 		floorData,
@@ -4981,115 +8006,195 @@ EOF
 		// ========================================
 		let currentXPrimaria = CIRCULACION_LATERAL;
 
-		for (let i = 0; i < floorData.primaria; i++) {
-			const x = origin.east + dirX.east * currentXPrimaria;
-			const y = origin.north + dirX.north * currentXPrimaria;
+		// Solo renderizar si hay aulas O aulas adicionales O ambientes reubicados
+		if (
+			floorData.primaria > 0 ||
+			(floorData.secundariaEnPabellonPrimaria &&
+				floorData.secundariaEnPabellonPrimaria > 0) ||
+			(floorData.ambientesReubicadosPrimaria &&
+				floorData.ambientesReubicadosPrimaria.length > 0)
+		) {
+			// Renderizar aulas normales de primaria
+			for (let i = 0; i < floorData.primaria; i++) {
+				const x = origin.east + dirX.east * currentXPrimaria;
+				const y = origin.north + dirX.north * currentXPrimaria;
 
-			const aulaData = createRoomCorners(
-				x,
-				y,
-				CLASSROOM_WIDTH,
-				CLASSROOM_HEIGHT
-			);
-			elementos.primaria.push({
-				corners: aulaData.corners,
-				realCorners: aulaData.realCorners,
-			});
-			currentXPrimaria += CLASSROOM_WIDTH;
-
-			if (i === 0 && floorData.primaria > 0 && totalFloors > 1) {
-				// Escalera
-				const xEsc = origin.east + dirX.east * currentXPrimaria;
-				const yEsc = origin.north + dirX.north * currentXPrimaria;
-
-				const escaleraData = createRoomCorners(
-					xEsc,
-					yEsc,
-					ESCALERA_WIDTH,
-					ESCALERA_HEIGHT
+				const aulaData = createRoomCorners(
+					x,
+					y,
+					CLASSROOM_WIDTH,
+					CLASSROOM_HEIGHT
 				);
-				elementos.escaleras.push({
-					nivel: "Primaria",
-					corners: escaleraData.corners,
-					realCorners: escaleraData.realCorners,
+				elementos.primaria.push({
+					corners: aulaData.corners,
+					realCorners: aulaData.realCorners,
 				});
-				currentXPrimaria += ESCALERA_WIDTH;
+				currentXPrimaria += CLASSROOM_WIDTH;
 
-				// Baño (solo piso 1)
-				if (currentFloor === 1) {
-					const xBano = origin.east + dirX.east * currentXPrimaria;
-					const yBano = origin.north + dirX.north * currentXPrimaria;
+				if (i === 0 && floorData.primaria > 0) {
+					// ✅ ESCALERA: solo si hay más de un piso
+					if (totalFloors > 1) {
+						const xEsc = origin.east + dirX.east * currentXPrimaria;
+						const yEsc =
+							origin.north + dirX.north * currentXPrimaria;
 
-					const banoData = createRoomCorners(
-						xBano,
-						yBano,
-						BANO_WIDTH,
-						BANO_HEIGHT
-					);
-					elementos.banos.push({
-						nivel: "Primaria",
-						corners: banoData.corners,
-						realCorners: banoData.realCorners,
-					});
-					currentXPrimaria += BANO_WIDTH;
+						const escaleraData = createRoomCorners(
+							xEsc,
+							yEsc,
+							ESCALERA_WIDTH,
+							ESCALERA_HEIGHT
+						);
+						elementos.escaleras.push({
+							nivel: "Primaria",
+							corners: escaleraData.corners,
+							realCorners: escaleraData.realCorners,
+						});
+						currentXPrimaria += ESCALERA_WIDTH;
+					}
+
+					// ✅ BAÑO: siempre en piso 1
+					if (currentFloor === 1) {
+						const xBano =
+							origin.east + dirX.east * currentXPrimaria;
+						const yBano =
+							origin.north + dirX.north * currentXPrimaria;
+
+						const banoData = createRoomCorners(
+							xBano,
+							yBano,
+							BANO_WIDTH,
+							BANO_HEIGHT
+						);
+						elementos.banos.push({
+							nivel: "Primaria",
+							corners: banoData.corners,
+							realCorners: banoData.realCorners,
+						});
+						currentXPrimaria += BANO_WIDTH;
+					}
 				}
 			}
-		}
 
-		// Ambientes en pabellón primaria
-		const ambientesPrimariaEnPabellon =
-			distribution.ambientesEnPabellones.filter(
-				(a) => a.pabellon === "primaria"
-			);
-
-		if (
-			ambientesPrimariaEnPabellon.length > 0 &&
-			currentFloor === 1 &&
-			floorData.primaria > 0
-		) {
-			ambientesPrimariaEnPabellon.forEach((ambiente) => {
-				const x = origin.east + dirX.east * currentXPrimaria;
-				const y = origin.north + dirX.north * currentXPrimaria;
-
-				const ambienteData = createRoomCorners(
-					x,
-					y,
-					ambiente.ancho,
-					ambiente.alto
+			// ✅ AULAS DE SECUNDARIA EN PABELLÓN PRIMARIA (si el pabellón estaba vacío)
+			if (
+				floorData.secundariaEnPabellonPrimaria &&
+				floorData.secundariaEnPabellonPrimaria > 0
+			) {
+				console.log(
+					`🎨 Renderizando ${floorData.secundariaEnPabellonPrimaria} aulas de secundaria en pabellón primaria (VERTICAL)`
 				);
-				elementos.ambientes.push({
-					nombre: ambiente.nombre,
-					tipo: "pabellon",
-					corners: ambienteData.corners,
-					realCorners: ambienteData.realCorners,
-				});
-				currentXPrimaria += ambiente.ancho;
-			});
-		}
 
-		// Ambientes en espacio libre de primaria
-		if (
-			floorData.ambientesPrimariaLibre &&
-			floorData.ambientesPrimariaLibre.length > 0
-		) {
-			floorData.ambientesPrimariaLibre.forEach((ambiente) => {
-				const x = origin.east + dirX.east * currentXPrimaria;
-				const y = origin.north + dirX.north * currentXPrimaria;
+				for (
+					let i = 0;
+					i < floorData.secundariaEnPabellonPrimaria;
+					i++
+				) {
+					const x = origin.east + dirX.east * currentXPrimaria;
+					const y = origin.north + dirX.north * currentXPrimaria;
 
-				const ambienteData = createRoomCorners(
-					x,
-					y,
-					ambiente.ancho,
-					ambiente.alto
+					const aulaData = createRoomCorners(
+						x,
+						y,
+						CLASSROOM_WIDTH,
+						CLASSROOM_HEIGHT
+					);
+					elementos.secundaria.push({
+						corners: aulaData.corners,
+						realCorners: aulaData.realCorners,
+					});
+					currentXPrimaria += CLASSROOM_WIDTH;
+					console.log(
+						`  ✅ Aula secundaria ${i + 1} en pabellón primaria`
+					);
+				}
+			}
+
+			// ✅ AMBIENTES EN PABELLÓN PRIMARIA: Renderizar SIEMPRE si existen
+			const ambientesPrimariaEnPabellon =
+				distribution.ambientesEnPabellones.filter(
+					(a) => a.pabellon === "primaria"
 				);
-				elementos.ambientes.push({
-					nombre: ambiente.nombre,
-					tipo: "pabellon_libre",
-					corners: ambienteData.corners,
-					realCorners: ambienteData.realCorners,
+
+			if (ambientesPrimariaEnPabellon.length > 0 && currentFloor === 1) {
+				ambientesPrimariaEnPabellon.forEach((ambiente) => {
+					const x = origin.east + dirX.east * currentXPrimaria;
+					const y = origin.north + dirX.north * currentXPrimaria;
+
+					const ambienteData = createRoomCorners(
+						x,
+						y,
+						ambiente.ancho,
+						ambiente.alto
+					);
+					elementos.ambientes.push({
+						nombre: ambiente.nombre,
+						tipo: "pabellon",
+						corners: ambienteData.corners,
+						realCorners: ambienteData.realCorners,
+					});
+					currentXPrimaria += ambiente.ancho;
 				});
-				currentXPrimaria += ambiente.ancho;
-			});
+			}
+
+			// Ambientes en espacio libre de primaria
+			if (
+				floorData.ambientesPrimariaLibre &&
+				floorData.ambientesPrimariaLibre.length > 0
+			) {
+				floorData.ambientesPrimariaLibre.forEach((ambiente) => {
+					const x = origin.east + dirX.east * currentXPrimaria;
+					const y = origin.north + dirX.north * currentXPrimaria;
+
+					const ambienteData = createRoomCorners(
+						x,
+						y,
+						ambiente.ancho,
+						ambiente.alto
+					);
+					elementos.ambientes.push({
+						nombre: ambiente.nombre,
+						tipo: "pabellon_libre",
+						corners: ambienteData.corners,
+						realCorners: ambienteData.realCorners,
+					});
+					currentXPrimaria += ambiente.ancho;
+				});
+			}
+
+			// ✅ Ambientes reubicados en pabellón primaria
+			if (
+				floorData.ambientesReubicadosPrimaria &&
+				floorData.ambientesReubicadosPrimaria.length > 0 &&
+				currentFloor === 1
+			) {
+				console.log(
+					`🎨 Renderizando ${floorData.ambientesReubicadosPrimaria.length} ambientes reubicados en primaria (VERTICAL)`
+				);
+
+				floorData.ambientesReubicadosPrimaria.forEach((ambiente) => {
+					const x = origin.east + dirX.east * currentXPrimaria;
+					const y = origin.north + dirX.north * currentXPrimaria;
+
+					const ambienteData = createRoomCorners(
+						x,
+						y,
+						ambiente.ancho,
+						ambiente.alto
+					);
+					elementos.ambientes.push({
+						nombre: ambiente.nombre,
+						tipo: "reubicado",
+						corners: ambienteData.corners,
+						realCorners: ambienteData.realCorners,
+					});
+					currentXPrimaria += ambiente.ancho;
+					console.log(
+						`  ✅ ${
+							ambiente.nombre
+						} renderizado en X: ${currentXPrimaria.toFixed(1)}`
+					);
+				});
+			}
 		}
 
 		// ========================================
@@ -5097,145 +8202,237 @@ EOF
 		// ========================================
 		let currentXSecundaria = CIRCULACION_LATERAL;
 
-		for (let i = 0; i < floorData.secundaria; i++) {
-			const x =
-				origin.east +
-				dirX.east * currentXSecundaria +
-				dirY.east * (rectHeight - CLASSROOM_HEIGHT);
-			const y =
-				origin.north +
-				dirX.north * currentXSecundaria +
-				dirY.north * (rectHeight - CLASSROOM_HEIGHT);
-
-			const aulaData = createRoomCorners(
-				x,
-				y,
-				CLASSROOM_WIDTH,
-				CLASSROOM_HEIGHT
-			);
-			elementos.secundaria.push({
-				corners: aulaData.corners,
-				realCorners: aulaData.realCorners,
-			});
-			currentXSecundaria += CLASSROOM_WIDTH;
-
-			if (i === 0 && floorData.secundaria > 0 && totalFloors > 1) {
-				// Escalera
-				const xEsc =
+		// Solo renderizar si hay aulas O aulas adicionales O ambientes reubicados
+		if (
+			floorData.secundaria > 0 ||
+			(floorData.primariaEnPabellonSecundaria &&
+				floorData.primariaEnPabellonSecundaria > 0) ||
+			(floorData.ambientesReubicadosSecundaria &&
+				floorData.ambientesReubicadosSecundaria.length > 0)
+		) {
+			// Renderizar aulas normales de secundaria
+			for (let i = 0; i < floorData.secundaria; i++) {
+				const x =
 					origin.east +
 					dirX.east * currentXSecundaria +
 					dirY.east * (rectHeight - CLASSROOM_HEIGHT);
-				const yEsc =
+				const y =
 					origin.north +
 					dirX.north * currentXSecundaria +
 					dirY.north * (rectHeight - CLASSROOM_HEIGHT);
 
-				const escaleraData = createRoomCorners(
-					xEsc,
-					yEsc,
-					ESCALERA_WIDTH,
-					ESCALERA_HEIGHT
+				const aulaData = createRoomCorners(
+					x,
+					y,
+					CLASSROOM_WIDTH,
+					CLASSROOM_HEIGHT
 				);
-				elementos.escaleras.push({
-					nivel: "Secundaria",
-					corners: escaleraData.corners,
-					realCorners: escaleraData.realCorners,
+				elementos.secundaria.push({
+					corners: aulaData.corners,
+					realCorners: aulaData.realCorners,
 				});
-				currentXSecundaria += ESCALERA_WIDTH;
+				currentXSecundaria += CLASSROOM_WIDTH;
 
-				// Baño (solo piso 1)
-				if (currentFloor === 1) {
-					const xBano =
+				if (i === 0 && floorData.secundaria > 0) {
+					// ✅ ESCALERA: solo si hay más de un piso
+					if (totalFloors > 1) {
+						const xEsc =
+							origin.east +
+							dirX.east * currentXSecundaria +
+							dirY.east * (rectHeight - CLASSROOM_HEIGHT);
+						const yEsc =
+							origin.north +
+							dirX.north * currentXSecundaria +
+							dirY.north * (rectHeight - CLASSROOM_HEIGHT);
+
+						const escaleraData = createRoomCorners(
+							xEsc,
+							yEsc,
+							ESCALERA_WIDTH,
+							ESCALERA_HEIGHT
+						);
+						elementos.escaleras.push({
+							nivel: "Secundaria",
+							corners: escaleraData.corners,
+							realCorners: escaleraData.realCorners,
+						});
+						currentXSecundaria += ESCALERA_WIDTH;
+					}
+
+					// ✅ BAÑO: siempre en piso 1
+					if (currentFloor === 1) {
+						const xBano =
+							origin.east +
+							dirX.east * currentXSecundaria +
+							dirY.east * (rectHeight - CLASSROOM_HEIGHT);
+						const yBano =
+							origin.north +
+							dirX.north * currentXSecundaria +
+							dirY.north * (rectHeight - CLASSROOM_HEIGHT);
+
+						const banoData = createRoomCorners(
+							xBano,
+							yBano,
+							BANO_WIDTH,
+							BANO_HEIGHT
+						);
+						elementos.banos.push({
+							nivel: "Secundaria",
+							corners: banoData.corners,
+							realCorners: banoData.realCorners,
+						});
+						currentXSecundaria += BANO_WIDTH;
+					}
+				}
+			}
+
+			// ✅ AULAS DE PRIMARIA EN PABELLÓN SECUNDARIA (si el pabellón estaba vacío)
+			if (
+				floorData.primariaEnPabellonSecundaria &&
+				floorData.primariaEnPabellonSecundaria > 0
+			) {
+				console.log(
+					`🎨 Renderizando ${floorData.primariaEnPabellonSecundaria} aulas de primaria en pabellón secundaria (VERTICAL)`
+				);
+
+				for (
+					let i = 0;
+					i < floorData.primariaEnPabellonSecundaria;
+					i++
+				) {
+					const x =
 						origin.east +
 						dirX.east * currentXSecundaria +
 						dirY.east * (rectHeight - CLASSROOM_HEIGHT);
-					const yBano =
+					const y =
 						origin.north +
 						dirX.north * currentXSecundaria +
 						dirY.north * (rectHeight - CLASSROOM_HEIGHT);
 
-					const banoData = createRoomCorners(
-						xBano,
-						yBano,
-						BANO_WIDTH,
-						BANO_HEIGHT
+					const aulaData = createRoomCorners(
+						x,
+						y,
+						CLASSROOM_WIDTH,
+						CLASSROOM_HEIGHT
 					);
-					elementos.banos.push({
-						nivel: "Secundaria",
-						corners: banoData.corners,
-						realCorners: banoData.realCorners,
+					elementos.primaria.push({
+						corners: aulaData.corners,
+						realCorners: aulaData.realCorners,
 					});
-					currentXSecundaria += BANO_WIDTH;
+					currentXSecundaria += CLASSROOM_WIDTH;
+					console.log(
+						`  ✅ Aula primaria ${i + 1} en pabellón secundaria`
+					);
 				}
 			}
-		}
 
-		// Ambientes en pabellón secundaria
-		const ambientesSecundariaEnPabellon =
-			distribution.ambientesEnPabellones.filter(
-				(a) => a.pabellon === "secundaria"
-			);
-
-		if (
-			ambientesSecundariaEnPabellon.length > 0 &&
-			currentFloor === 1 &&
-			floorData.secundaria > 0
-		) {
-			ambientesSecundariaEnPabellon.forEach((ambiente) => {
-				const x =
-					origin.east +
-					dirX.east * currentXSecundaria +
-					dirY.east * (rectHeight - CLASSROOM_HEIGHT);
-				const y =
-					origin.north +
-					dirX.north * currentXSecundaria +
-					dirY.north * (rectHeight - CLASSROOM_HEIGHT);
-
-				const ambienteData = createRoomCorners(
-					x,
-					y,
-					ambiente.ancho,
-					ambiente.alto
+			// ✅ AMBIENTES EN PABELLÓN SECUNDARIA: Renderizar SIEMPRE si existen
+			const ambientesSecundariaEnPabellon =
+				distribution.ambientesEnPabellones.filter(
+					(a) => a.pabellon === "secundaria"
 				);
-				elementos.ambientes.push({
-					nombre: ambiente.nombre,
-					tipo: "pabellon",
-					corners: ambienteData.corners,
-					realCorners: ambienteData.realCorners,
+
+			if (
+				ambientesSecundariaEnPabellon.length > 0 &&
+				currentFloor === 1
+			) {
+				ambientesSecundariaEnPabellon.forEach((ambiente) => {
+					const x =
+						origin.east +
+						dirX.east * currentXSecundaria +
+						dirY.east * (rectHeight - CLASSROOM_HEIGHT);
+					const y =
+						origin.north +
+						dirX.north * currentXSecundaria +
+						dirY.north * (rectHeight - CLASSROOM_HEIGHT);
+
+					const ambienteData = createRoomCorners(
+						x,
+						y,
+						ambiente.ancho,
+						ambiente.alto
+					);
+					elementos.ambientes.push({
+						nombre: ambiente.nombre,
+						tipo: "pabellon",
+						corners: ambienteData.corners,
+						realCorners: ambienteData.realCorners,
+					});
+					currentXSecundaria += ambiente.ancho;
 				});
-				currentXSecundaria += ambiente.ancho;
-			});
-		}
+			}
 
-		// Ambientes en espacio libre de secundaria
-		if (
-			floorData.ambientesSecundariaLibre &&
-			floorData.ambientesSecundariaLibre.length > 0
-		) {
-			floorData.ambientesSecundariaLibre.forEach((ambiente) => {
-				const x =
-					origin.east +
-					dirX.east * currentXSecundaria +
-					dirY.east * (rectHeight - CLASSROOM_HEIGHT);
-				const y =
-					origin.north +
-					dirX.north * currentXSecundaria +
-					dirY.north * (rectHeight - CLASSROOM_HEIGHT);
+			// Ambientes en espacio libre de secundaria
+			if (
+				floorData.ambientesSecundariaLibre &&
+				floorData.ambientesSecundariaLibre.length > 0
+			) {
+				floorData.ambientesSecundariaLibre.forEach((ambiente) => {
+					const x =
+						origin.east +
+						dirX.east * currentXSecundaria +
+						dirY.east * (rectHeight - CLASSROOM_HEIGHT);
+					const y =
+						origin.north +
+						dirX.north * currentXSecundaria +
+						dirY.north * (rectHeight - CLASSROOM_HEIGHT);
 
-				const ambienteData = createRoomCorners(
-					x,
-					y,
-					ambiente.ancho,
-					ambiente.alto
+					const ambienteData = createRoomCorners(
+						x,
+						y,
+						ambiente.ancho,
+						ambiente.alto
+					);
+					elementos.ambientes.push({
+						nombre: ambiente.nombre,
+						tipo: "pabellon_libre",
+						corners: ambienteData.corners,
+						realCorners: ambienteData.realCorners,
+					});
+					currentXSecundaria += ambiente.ancho;
+				});
+			}
+
+			// ✅ Ambientes reubicados en pabellón secundaria
+			if (
+				floorData.ambientesReubicadosSecundaria &&
+				floorData.ambientesReubicadosSecundaria.length > 0 &&
+				currentFloor === 1
+			) {
+				console.log(
+					`🎨 Renderizando ${floorData.ambientesReubicadosSecundaria.length} ambientes reubicados en secundaria (VERTICAL)`
 				);
-				elementos.ambientes.push({
-					nombre: ambiente.nombre,
-					tipo: "pabellon_libre",
-					corners: ambienteData.corners,
-					realCorners: ambienteData.realCorners,
+
+				floorData.ambientesReubicadosSecundaria.forEach((ambiente) => {
+					const x =
+						origin.east +
+						dirX.east * currentXSecundaria +
+						dirY.east * (rectHeight - CLASSROOM_HEIGHT);
+					const y =
+						origin.north +
+						dirX.north * currentXSecundaria +
+						dirY.north * (rectHeight - CLASSROOM_HEIGHT);
+
+					const ambienteData = createRoomCorners(
+						x,
+						y,
+						ambiente.ancho,
+						ambiente.alto
+					);
+					elementos.ambientes.push({
+						nombre: ambiente.nombre,
+						tipo: "reubicado",
+						corners: ambienteData.corners,
+						realCorners: ambienteData.realCorners,
+					});
+					currentXSecundaria += ambiente.ancho;
+					console.log(
+						`  ✅ ${
+							ambiente.nombre
+						} renderizado en X: ${currentXSecundaria.toFixed(1)}`
+					);
 				});
-				currentXSecundaria += ambiente.ancho;
-			});
+			}
 		}
 
 		// ========================================
@@ -5252,9 +8449,11 @@ EOF
 		// ✅ CALCULAR ALTO TOTAL DEL PABELLÓN INICIAL
 		let altoTotalInicial = floorData.inicial * CLASSROOM_HEIGHT;
 
-		// Agregar escalera y baño si hay más de un piso
-		if (floorData.inicial > 0 && totalFloors > 1) {
-			altoTotalInicial += ESCALERA_HEIGHT;
+		// Agregar escalera y baño
+		if (floorData.inicial > 0) {
+			if (totalFloors > 1) {
+				altoTotalInicial += ESCALERA_HEIGHT;
+			}
 			if (currentFloor === 1) {
 				altoTotalInicial += BANO_HEIGHT;
 			}
@@ -5292,12 +8491,6 @@ EOF
 		let currentYInicial =
 			startYInicial + (espacioDisponibleInicial - altoTotalInicial) / 2;
 
-		// console.log("📍 Inicial centrado (vertical):", {
-		// 	altoTotal: altoTotalInicial.toFixed(1),
-		// 	espacioDisponible: espacioDisponibleInicial.toFixed(1),
-		// 	posicionInicio: currentYInicial.toFixed(1),
-		// });
-
 		// Renderizar aulas
 		for (let i = 0; i < floorData.inicial; i++) {
 			const x = origin.east + dirY.east * currentYInicial;
@@ -5330,25 +8523,27 @@ EOF
 			currentYInicial += CLASSROOM_HEIGHT;
 
 			// Escalera y baño después de la primera aula
-			if (i === 0 && floorData.inicial > 0 && totalFloors > 1) {
-				// Escalera
-				const xEsc = origin.east + dirY.east * currentYInicial;
-				const yEsc = origin.north + dirY.north * currentYInicial;
+			if (i === 0 && floorData.inicial > 0) {
+				// ✅ ESCALERA: solo si hay más de un piso
+				if (totalFloors > 1) {
+					const xEsc = origin.east + dirY.east * currentYInicial;
+					const yEsc = origin.north + dirY.north * currentYInicial;
 
-				const escaleraData = createRoomCorners(
-					xEsc,
-					yEsc,
-					CLASSROOM_WIDTH,
-					ESCALERA_HEIGHT
-				);
-				elementos.escaleras.push({
-					nivel: "Inicial",
-					corners: escaleraData.corners,
-					realCorners: escaleraData.realCorners,
-				});
-				currentYInicial += ESCALERA_HEIGHT;
+					const escaleraData = createRoomCorners(
+						xEsc,
+						yEsc,
+						CLASSROOM_WIDTH,
+						ESCALERA_HEIGHT
+					);
+					elementos.escaleras.push({
+						nivel: "Inicial",
+						corners: escaleraData.corners,
+						realCorners: escaleraData.realCorners,
+					});
+					currentYInicial += ESCALERA_HEIGHT;
+				}
 
-				// Baño (solo piso 1)
+				// ✅ BAÑO: siempre en piso 1
 				if (currentFloor === 1) {
 					const xBano = origin.east + dirY.east * currentYInicial;
 					const yBano = origin.north + dirY.north * currentYInicial;
@@ -5475,14 +8670,6 @@ EOF
 				};
 			}
 
-			// const floorData = distribution.floors[currentFloor];
-			// const layoutMode = distribution.layoutMode || "horizontal";
-			// const rectWidth = maxRectangle.width;
-			// const rectHeight = maxRectangle.height;
-			// const origin = maxRectangle.corners[0];
-			// const angle = (maxRectangle.angle * Math.PI) / 180;
-			// const dirX = { east: Math.cos(angle), north: Math.sin(angle) };
-			// const dirY = { east: -Math.sin(angle), north: Math.cos(angle) };
 			const floorData = distribution.floors[currentFloor];
 			const layoutMode = distribution.layoutMode || "horizontal";
 
@@ -5491,7 +8678,7 @@ EOF
 
 			const rectWidth = maxRectangle.width - RETIRO_TERRENO * 2;
 			const rectHeight = maxRectangle.height - RETIRO_TERRENO * 2;
-			// const rectWidth = 60.9543 - RETIRO_TERRENO * 2;
+
 			// const rectHeight = 74.8472 - RETIRO_TERRENO * 2;
 
 			// Calcular ángulo y direcciones
@@ -5531,9 +8718,12 @@ EOF
 				};
 			};
 
+			// ✅ ITERAR SOBRE TODOS LOS PISOS
+
 			if (layoutMode === "horizontal") {
 				renderLayoutHorizontal(
 					floorData,
+
 					origin,
 					dirX,
 					dirY,
@@ -5545,6 +8735,7 @@ EOF
 			} else {
 				renderLayoutVertical(
 					floorData,
+
 					origin,
 					dirX,
 					dirY,
@@ -5556,8 +8747,8 @@ EOF
 			}
 
 			// ✅ CUADRANTE INTERIOR (funciona para ambos modos)
-			if (currentFloor === 1 && floorData.distribucionCuadrante) {
-				const dist = floorData.distribucionCuadrante;
+			if (currentFloor === 1 && distribution.floors[1]?.distribucionCuadrante) {
+				const dist = distribution.floors[1].distribucionCuadrante;
 
 				// Renderizar cancha
 				if (dist.cancha) {
@@ -5626,6 +8817,21 @@ EOF
 			}
 		}
 
+		if (distribution) {
+			dispatch(
+				setVista3DData({
+					elementos: elementos,
+					coordinates: coordinates,
+					maxRectangle: maxRectangle,
+					distribution: distribution,
+					capacityInfo: capacityInfo,
+					currentFloor: currentFloor,
+					totalFloors: totalFloors,
+					layoutMode: layoutMode,
+				})
+			);
+		}
+
 		return {
 			points,
 			rectangleSVG,
@@ -5692,14 +8898,37 @@ EOF
 	// 		}
 
 	// 		const floorData = distribution.floors[currentFloor];
-	// 		const rectWidth = maxRectangle.width;
-	// 		const rectHeight = maxRectangle.height;
-	// 		const origin = maxRectangle.corners[0];
-	// 		const angle = (maxRectangle.angle * Math.PI) / 180;
+	// 		const strategy = distribution.strategy || "interior-quadrant";
+	// 		const layoutMode =
+	// 			distribution.layoutMode ||
+	// 			distribution.orientation ||
+	// 			"horizontal";
+
+	// 		// ✅ RETIRO DESDE EL BORDE DEL TERRENO
+	// 		const RETIRO_TERRENO = 0.5;
+
+	// 		const rectWidth = maxRectangle.width - RETIRO_TERRENO * 2;
+	// 		const rectHeight = maxRectangle.height - RETIRO_TERRENO * 2;
+
+	// 		// const rectHeight = 74.8472 - RETIRO_TERRENO * 2;
+
+	// 		// Calcular ángulo y direcciones
+	// 		const angle = (maxRectangle.angle * Math.PI) / 181;
 	// 		const dirX = { east: Math.cos(angle), north: Math.sin(angle) };
 	// 		const dirY = { east: -Math.sin(angle), north: Math.cos(angle) };
 
-	// 		// ✅ FUNCIÓN MODIFICADA: Retorna coordenadas SVG y REALES
+	// 		// ✅ ORIGEN AJUSTADO (con retiro aplicado)
+	// 		const origin = {
+	// 			east:
+	// 				maxRectangle.corners[0].east +
+	// 				dirX.east * RETIRO_TERRENO +
+	// 				dirY.east * RETIRO_TERRENO,
+	// 			north:
+	// 				maxRectangle.corners[0].north +
+	// 				dirX.north * RETIRO_TERRENO +
+	// 				dirY.north * RETIRO_TERRENO,
+	// 		};
+
 	// 		const createRoomCorners = (x, y, w, h) => {
 	// 			const realCorners = [
 	// 				{ east: x, north: y },
@@ -5716,531 +8945,83 @@ EOF
 	// 					x: (c.east - minEast) * scale + padding,
 	// 					y: height - ((c.north - minNorth) * scale + padding),
 	// 				})),
-	// 				realCorners: realCorners, // ✅ Coordenadas REALES
+	// 				realCorners: realCorners,
 	// 			};
 	// 		};
 
-	// 		// ENTRADA - al medio de ambientes complementarios
-	// 		if (
-	// 			currentFloor === 1 &&
-	// 			floorData.ambientesSuperiores &&
-	// 			floorData.ambientesSuperiores.length > 0
-	// 		) {
-	// 			const totalAmbientes = floorData.ambientesSuperiores.length;
-	// 			const totalAmbientesWidth =
-	// 				floorData.ambientesSuperiores.reduce(
-	// 					(sum, amb) => sum + amb.ancho,
-	// 					0
+	// 		// ✅ ITERAR SOBRE TODOS LOS PISOS
+
+	// 		// ✅ RENDERIZAR SEGÚN ESTRATEGIA
+	// 		if (strategy === "two-quadrants") {
+	// 			// Modo de dos cuadrantes separados
+	// 			if (layoutMode === "vertical-stack") {
+	// 				renderTwoQuadrantsVerticalStack(
+	// 					floorData,
+	// 					distribution,
+	// 					origin,
+	// 					dirX,
+	// 					dirY,
+	// 					rectWidth,
+	// 					rectHeight,
+	// 					createRoomCorners,
+	// 					elementos
 	// 				);
-
-	// 			// ✅ CALCULAR POSICIÓN MEDIA (entre ambiente 2 y 3 si hay 4)
-	// 			const posicionEntrada = Math.floor(totalAmbientes / 2);
-
-	// 			// Calcular ancho de ambientes ANTES de la entrada
-	// 			const widthAntesEntrada = floorData.ambientesSuperiores
-	// 				.slice(0, posicionEntrada)
-	// 				.reduce((sum, amb) => sum + amb.ancho, 0);
-
-	// 			// Centrar todo el bloque (ambientes + entrada)
-	// 			const totalWidth = totalAmbientesWidth + ENTRADA_WIDTH;
-	// 			const startXAmbientes = (rectWidth - totalWidth) / 2;
-
-	// 			let currentXAmbiente = startXAmbientes;
-	// 			const ambienteY = rectHeight - CLASSROOM_HEIGHT;
-
-	// 			// Dibujar ambientes ANTES de la entrada
-	// 			floorData.ambientesSuperiores
-	// 				.slice(0, posicionEntrada)
-	// 				.forEach((ambiente) => {
-	// 					const x =
-	// 						origin.east +
-	// 						dirX.east * currentXAmbiente +
-	// 						dirY.east * (rectHeight - ambiente.alto);
-	// 					const y =
-	// 						origin.north +
-	// 						dirX.north * currentXAmbiente +
-	// 						dirY.north * (rectHeight - ambiente.alto);
-
-	// 					const ambienteData = createRoomCorners(
-	// 						x,
-	// 						y,
-	// 						ambiente.ancho,
-	// 						ambiente.alto
-	// 					);
-	// 					elementos.ambientes.push({
-	// 						nombre: ambiente.nombre,
-	// 						tipo: "superior",
-	// 						corners: ambienteData.corners,
-	// 						realCorners: ambienteData.realCorners,
-	// 					});
-	// 					currentXAmbiente += ambiente.ancho;
-	// 				});
-
-	// 			// ✅ ENTRADA AL MEDIO
-	// 			const xEnt =
-	// 				origin.east +
-	// 				dirX.east * currentXAmbiente +
-	// 				dirY.east * ambienteY;
-	// 			const yEnt =
-	// 				origin.north +
-	// 				dirX.north * currentXAmbiente +
-	// 				dirY.north * ambienteY;
-
-	// 			const entradaData = createRoomCorners(
-	// 				xEnt,
-	// 				yEnt,
-	// 				ENTRADA_WIDTH,
-	// 				CLASSROOM_HEIGHT
-	// 			);
-	// 			elementos.entrada = {
-	// 				corners: entradaData.corners,
-	// 				realCorners: entradaData.realCorners,
-	// 			};
-	// 			currentXAmbiente += ENTRADA_WIDTH;
-
-	// 			// Dibujar ambientes DESPUÉS de la entrada
-	// 			floorData.ambientesSuperiores
-	// 				.slice(posicionEntrada)
-	// 				.forEach((ambiente) => {
-	// 					const x =
-	// 						origin.east +
-	// 						dirX.east * currentXAmbiente +
-	// 						dirY.east * (rectHeight - ambiente.alto);
-	// 					const y =
-	// 						origin.north +
-	// 						dirX.north * currentXAmbiente +
-	// 						dirY.north * (rectHeight - ambiente.alto);
-
-	// 					const ambienteData = createRoomCorners(
-	// 						x,
-	// 						y,
-	// 						ambiente.ancho,
-	// 						ambiente.alto
-	// 					);
-	// 					elementos.ambientes.push({
-	// 						nombre: ambiente.nombre,
-	// 						tipo: "superior",
-	// 						corners: ambienteData.corners,
-	// 						realCorners: ambienteData.realCorners,
-	// 					});
-	// 					currentXAmbiente += ambiente.ancho;
-	// 				});
-	// 		}
-
-	// 		// INICIAL (o pabellón que ocupa ese lugar)
-	// 		const pabellonInferiorColor =
-	// 			distribution.pabellonInferiorEs === "primaria"
-	// 				? "primaria"
-	// 				: distribution.pabellonInferiorEs === "secundaria"
-	// 				? "secundaria"
-	// 				: "inicial";
-
-	// 		let currentXInicial = CIRCULACION_LATERAL;
-
-	// 		for (let i = 0; i < floorData.inicial; i++) {
-	// 			// ✅ DIBUJAR AULA PRIMERO
-	// 			const x = origin.east + dirX.east * currentXInicial;
-	// 			const y = origin.north + dirX.north * currentXInicial;
-
-	// 			const aulaData = createRoomCorners(
-	// 				x,
-	// 				y,
-	// 				CLASSROOM_WIDTH,
-	// 				CLASSROOM_HEIGHT
-	// 			);
-
-	// 			if (pabellonInferiorColor === "inicial") {
-	// 				elementos.inicial.push({
-	// 					corners: aulaData.corners,
-	// 					realCorners: aulaData.realCorners,
-	// 				});
-	// 			} else if (pabellonInferiorColor === "primaria") {
-	// 				elementos.primaria.push({
-	// 					corners: aulaData.corners,
-	// 					realCorners: aulaData.realCorners,
-	// 				});
-	// 			} else if (pabellonInferiorColor === "secundaria") {
-	// 				elementos.secundaria.push({
-	// 					corners: aulaData.corners,
-	// 					realCorners: aulaData.realCorners,
-	// 				});
+	// 			} else {
+	// 				renderTwoQuadrantsHorizontalStack(
+	// 					floorData,
+	// 					distribution,
+	// 					origin,
+	// 					dirX,
+	// 					dirY,
+	// 					rectWidth,
+	// 					rectHeight,
+	// 					createRoomCorners,
+	// 					elementos
+	// 				);
 	// 			}
 
-	// 			currentXInicial += CLASSROOM_WIDTH;
-
-	// 			// ✅ DESPUÉS DE LA PRIMERA AULA: ESCALERA → BAÑO
-	// 			if (i === 0 && floorData.inicial > 0 && totalFloors > 1) {
-	// 				// ESCALERA PRIMERO (ambos pisos)
-	// 				const xEsc = origin.east + dirX.east * currentXInicial;
-	// 				const yEsc = origin.north + dirX.north * currentXInicial;
-
-	// 				const escaleraData = createRoomCorners(
-	// 					xEsc,
-	// 					yEsc,
-	// 					ESCALERA_WIDTH,
-	// 					ESCALERA_HEIGHT
+	// 			// Renderizar cancha en cuadrante separado
+	// 			canchaSVG = renderCanchaInSeparateQuadrant(
+	// 				distribution,
+	// 				origin,
+	// 				dirX,
+	// 				dirY,
+	// 				rectWidth,
+	// 				rectHeight,
+	// 				createRoomCorners,
+	// 				elementos
+	// 			);
+	// 		} else {
+	// 			// Modo de cuadrante interior (actual)
+	// 			if (layoutMode === "horizontal") {
+	// 				renderLayoutHorizontal(
+	// 					floorData,
+	// 					origin,
+	// 					dirX,
+	// 					dirY,
+	// 					rectWidth,
+	// 					rectHeight,
+	// 					createRoomCorners,
+	// 					elementos
 	// 				);
-	// 				elementos.escaleras.push({
-	// 					nivel: "Inicial",
-	// 					corners: escaleraData.corners,
-	// 					realCorners: escaleraData.realCorners,
-	// 				});
-	// 				currentXInicial += ESCALERA_WIDTH;
-
-	// 				// BAÑO DESPUÉS (solo piso 1)
-	// 				if (currentFloor === 1) {
-	// 					const xBano = origin.east + dirX.east * currentXInicial;
-	// 					const yBano =
-	// 						origin.north + dirX.north * currentXInicial;
-
-	// 					const banoData = createRoomCorners(
-	// 						xBano,
-	// 						yBano,
-	// 						BANO_WIDTH,
-	// 						BANO_HEIGHT
-	// 					);
-	// 					elementos.banos.push({
-	// 						nivel: "Inicial",
-	// 						corners: banoData.corners,
-	// 						realCorners: banoData.realCorners,
-	// 					});
-	// 					currentXInicial += BANO_WIDTH;
-	// 				}
+	// 			} else {
+	// 				renderLayoutVertical(
+	// 					floorData,
+	// 					origin,
+	// 					dirX,
+	// 					dirY,
+	// 					rectWidth,
+	// 					rectHeight,
+	// 					createRoomCorners,
+	// 					elementos
+	// 				);
 	// 			}
 	// 		}
+	// 		// ✅ CUADRANTE INTERIOR (funciona para ambos modos)
+	// 		if (distribution.floors[1]?.distribucionCuadrante) {
+	// 			const dist = distribution.floors[1].distribucionCuadrante;
 
-	// 		// ✅ NUEVO: Sala de Psicomotricidad al final del pabellón inicial
-	// 		const psicomotricidadEnInicial =
-	// 			distribution.ambientesEnPabellones.find(
-	// 				(a) => a.pabellon === "inicial"
-	// 			);
-
-	// 		if (
-	// 			psicomotricidadEnInicial &&
-	// 			currentFloor === 1 &&
-	// 			floorData.inicial > 0
-	// 		) {
-	// 			const x = origin.east + dirX.east * currentXInicial;
-	// 			const y = origin.north + dirX.north * currentXInicial;
-
-	// 			const psicomotricidadData = createRoomCorners(
-	// 				x,
-	// 				y,
-	// 				psicomotricidadEnInicial.ancho,
-	// 				psicomotricidadEnInicial.alto
-	// 			);
-	// 			elementos.ambientes.push({
-	// 				nombre: psicomotricidadEnInicial.nombre,
-	// 				tipo: "pabellon",
-	// 				corners: psicomotricidadData.corners,
-	// 				realCorners: psicomotricidadData.realCorners,
-	// 			});
-	// 		}
-
-	// 		// ✅ NUEVO: Ambientes en espacio libre de INICIAL
-	// 		if (
-	// 			floorData.ambientesInicialLibre &&
-	// 			floorData.ambientesInicialLibre.length > 0
-	// 		) {
-	// 			floorData.ambientesInicialLibre.forEach((ambiente) => {
-	// 				const x = origin.east + dirX.east * currentXInicial;
-	// 				const y = origin.north + dirX.north * currentXInicial;
-
-	// 				const ambienteData = createRoomCorners(
-	// 					x,
-	// 					y,
-	// 					ambiente.ancho,
-	// 					ambiente.alto
-	// 				);
-	// 				elementos.ambientes.push({
-	// 					nombre: ambiente.nombre,
-	// 					tipo: "pabellon_libre",
-	// 					corners: ambienteData.corners,
-	// 					realCorners: ambienteData.realCorners,
-	// 				});
-	// 				currentXInicial += ambiente.ancho;
-	// 			});
-	// 		}
-
-	// 		// PRIMARIA
-	// 		const startYPrimaria =
-	// 			CLASSROOM_HEIGHT + CIRCULACION_ENTRE_PABELLONES;
-	// 		let currentYPrimaria = startYPrimaria;
-	// 		const bibliotecaEnPrimaria =
-	// 			distribution.ambientesEnPabellones.find(
-	// 				(a) => a.pabellon === "primaria"
-	// 			);
-
-	// 		for (let i = 0; i < floorData.primaria; i++) {
-	// 			// ✅ DIBUJAR AULA PRIMERO
-	// 			const x = origin.east + dirY.east * currentYPrimaria;
-	// 			const y = origin.north + dirY.north * currentYPrimaria;
-
-	// 			const aulaData = createRoomCorners(
-	// 				x,
-	// 				y,
-	// 				CLASSROOM_WIDTH,
-	// 				CLASSROOM_HEIGHT
-	// 			);
-	// 			elementos.primaria.push({
-	// 				corners: aulaData.corners,
-	// 				realCorners: aulaData.realCorners,
-	// 			});
-	// 			currentYPrimaria += CLASSROOM_HEIGHT;
-
-	// 			// ✅ DESPUÉS DE LA PRIMERA AULA: ESCALERA → BAÑO
-	// 			if (i === 0 && floorData.primaria > 0 && totalFloors > 1) {
-	// 				// ESCALERA PRIMERO (ambos pisos)
-	// 				const xEsc = origin.east + dirY.east * currentYPrimaria;
-	// 				const yEsc = origin.north + dirY.north * currentYPrimaria;
-
-	// 				const escaleraData = createRoomCorners(
-	// 					xEsc,
-	// 					yEsc,
-	// 					CLASSROOM_WIDTH,
-	// 					ESCALERA_HEIGHT
-	// 				);
-	// 				elementos.escaleras.push({
-	// 					nivel: "Primaria",
-	// 					corners: escaleraData.corners,
-	// 					realCorners: escaleraData.realCorners,
-	// 				});
-	// 				currentYPrimaria += ESCALERA_HEIGHT;
-
-	// 				// BAÑO DESPUÉS (solo piso 1)
-	// 				if (currentFloor === 1) {
-	// 					const xBano =
-	// 						origin.east + dirY.east * currentYPrimaria;
-	// 					const yBano =
-	// 						origin.north + dirY.north * currentYPrimaria;
-
-	// 					const banoData = createRoomCorners(
-	// 						xBano,
-	// 						yBano,
-	// 						CLASSROOM_WIDTH,
-	// 						BANO_HEIGHT
-	// 					);
-	// 					elementos.banos.push({
-	// 						nivel: "Primaria",
-	// 						corners: banoData.corners,
-	// 						realCorners: banoData.realCorners,
-	// 					});
-	// 					currentYPrimaria += BANO_HEIGHT;
-	// 				}
-	// 			}
-	// 		}
-	// 		// Biblioteca y otros ambientes al final del pabellón primaria
-	// 		const ambientesPrimariaEnPabellon =
-	// 			distribution.ambientesEnPabellones.filter(
-	// 				(a) => a.pabellon === "primaria"
-	// 			);
-
-	// 		if (
-	// 			ambientesPrimariaEnPabellon.length > 0 &&
-	// 			currentFloor === 1 &&
-	// 			floorData.primaria > 0
-	// 		) {
-	// 			ambientesPrimariaEnPabellon.forEach((ambiente) => {
-	// 				const x = origin.east + dirY.east * currentYPrimaria;
-	// 				const y = origin.north + dirY.north * currentYPrimaria;
-
-	// 				const ambienteData = createRoomCorners(
-	// 					x,
-	// 					y,
-	// 					ambiente.ancho,
-	// 					ambiente.alto
-	// 				);
-	// 				elementos.ambientes.push({
-	// 					nombre: ambiente.nombre,
-	// 					tipo: "pabellon",
-	// 					corners: ambienteData.corners,
-	// 					realCorners: ambienteData.realCorners,
-	// 				});
-	// 				currentYPrimaria += ambiente.alto;
-	// 			});
-	// 		}
-
-	// 		// ✅ NUEVO: Ambientes en espacio libre de PRIMARIA
-	// 		if (
-	// 			floorData.ambientesPrimariaLibre &&
-	// 			floorData.ambientesPrimariaLibre.length > 0
-	// 		) {
-	// 			floorData.ambientesPrimariaLibre.forEach((ambiente) => {
-	// 				const x = origin.east + dirY.east * currentYPrimaria;
-	// 				const y = origin.north + dirY.north * currentYPrimaria;
-
-	// 				const ambienteData = createRoomCorners(
-	// 					x,
-	// 					y,
-	// 					ambiente.ancho,
-	// 					ambiente.alto
-	// 				);
-	// 				elementos.ambientes.push({
-	// 					nombre: ambiente.nombre,
-	// 					tipo: "pabellon_libre",
-	// 					corners: ambienteData.corners,
-	// 					realCorners: ambienteData.realCorners,
-	// 				});
-	// 				currentYPrimaria += ambiente.alto;
-	// 			});
-	// 		}
-
-	// 		// SECUNDARIA
-	// 		let currentYSecundaria = startYPrimaria;
-	// 		const laboratorioEnSecundaria =
-	// 			distribution.ambientesEnPabellones.find(
-	// 				(a) => a.pabellon === "secundaria"
-	// 			);
-
-	// 		for (let i = 0; i < floorData.secundaria; i++) {
-	// 			// ✅ DIBUJAR AULA PRIMERO
-	// 			const x =
-	// 				origin.east +
-	// 				dirX.east * (rectWidth - CLASSROOM_WIDTH) +
-	// 				dirY.east * currentYSecundaria;
-	// 			const y =
-	// 				origin.north +
-	// 				dirX.north * (rectWidth - CLASSROOM_WIDTH) +
-	// 				dirY.north * currentYSecundaria;
-
-	// 			const aulaData = createRoomCorners(
-	// 				x,
-	// 				y,
-	// 				CLASSROOM_WIDTH,
-	// 				CLASSROOM_HEIGHT
-	// 			);
-	// 			elementos.secundaria.push({
-	// 				corners: aulaData.corners,
-	// 				realCorners: aulaData.realCorners,
-	// 			});
-	// 			currentYSecundaria += CLASSROOM_HEIGHT;
-
-	// 			// ✅ DESPUÉS DE LA PRIMERA AULA: ESCALERA → BAÑO
-	// 			if (i === 0 && floorData.secundaria > 0 && totalFloors > 1) {
-	// 				// ESCALERA PRIMERO (ambos pisos)
-	// 				const xEsc =
-	// 					origin.east +
-	// 					dirX.east * (rectWidth - CLASSROOM_WIDTH) +
-	// 					dirY.east * currentYSecundaria;
-	// 				const yEsc =
-	// 					origin.north +
-	// 					dirX.north * (rectWidth - CLASSROOM_WIDTH) +
-	// 					dirY.north * currentYSecundaria;
-
-	// 				const escaleraData = createRoomCorners(
-	// 					xEsc,
-	// 					yEsc,
-	// 					CLASSROOM_WIDTH,
-	// 					ESCALERA_HEIGHT
-	// 				);
-	// 				elementos.escaleras.push({
-	// 					nivel: "Secundaria",
-	// 					corners: escaleraData.corners,
-	// 					realCorners: escaleraData.realCorners,
-	// 				});
-	// 				currentYSecundaria += ESCALERA_HEIGHT;
-
-	// 				// BAÑO DESPUÉS (solo piso 1)
-	// 				if (currentFloor === 1) {
-	// 					const xBano =
-	// 						origin.east +
-	// 						dirX.east * (rectWidth - CLASSROOM_WIDTH) +
-	// 						dirY.east * currentYSecundaria;
-	// 					const yBano =
-	// 						origin.north +
-	// 						dirX.north * (rectWidth - CLASSROOM_WIDTH) +
-	// 						dirY.north * currentYSecundaria;
-
-	// 					const banoData = createRoomCorners(
-	// 						xBano,
-	// 						yBano,
-	// 						CLASSROOM_WIDTH,
-	// 						BANO_HEIGHT
-	// 					);
-	// 					elementos.banos.push({
-	// 						nivel: "Secundaria",
-	// 						corners: banoData.corners,
-	// 						realCorners: banoData.realCorners,
-	// 					});
-	// 					currentYSecundaria += BANO_HEIGHT;
-	// 				}
-	// 			}
-	// 		}
-
-	// 		// Laboratorio y otros ambientes al final del pabellón secundaria
-	// 		const ambientesSecundariaEnPabellon =
-	// 			distribution.ambientesEnPabellones.filter(
-	// 				(a) => a.pabellon === "secundaria"
-	// 			);
-
-	// 		if (
-	// 			ambientesSecundariaEnPabellon.length > 0 &&
-	// 			currentFloor === 1 &&
-	// 			floorData.secundaria > 0
-	// 		) {
-	// 			ambientesSecundariaEnPabellon.forEach((ambiente) => {
-	// 				const x =
-	// 					origin.east +
-	// 					dirX.east * (rectWidth - CLASSROOM_WIDTH) +
-	// 					dirY.east * currentYSecundaria;
-	// 				const y =
-	// 					origin.north +
-	// 					dirX.north * (rectWidth - CLASSROOM_WIDTH) +
-	// 					dirY.north * currentYSecundaria;
-
-	// 				const ambienteData = createRoomCorners(
-	// 					x,
-	// 					y,
-	// 					ambiente.ancho,
-	// 					ambiente.alto
-	// 				);
-	// 				elementos.ambientes.push({
-	// 					nombre: ambiente.nombre,
-	// 					tipo: "pabellon",
-	// 					corners: ambienteData.corners,
-	// 					realCorners: ambienteData.realCorners,
-	// 				});
-	// 				currentYSecundaria += ambiente.alto;
-	// 			});
-	// 		}
-	// 		// ✅ NUEVO: Ambientes en espacio libre de SECUNDARIA
-	// 		if (
-	// 			floorData.ambientesSecundariaLibre &&
-	// 			floorData.ambientesSecundariaLibre.length > 0
-	// 		) {
-	// 			floorData.ambientesSecundariaLibre.forEach((ambiente) => {
-	// 				const x =
-	// 					origin.east +
-	// 					dirX.east * (rectWidth - CLASSROOM_WIDTH) +
-	// 					dirY.east * currentYSecundaria;
-	// 				const y =
-	// 					origin.north +
-	// 					dirX.north * (rectWidth - CLASSROOM_WIDTH) +
-	// 					dirY.north * currentYSecundaria;
-
-	// 				const ambienteData = createRoomCorners(
-	// 					x,
-	// 					y,
-	// 					ambiente.ancho,
-	// 					ambiente.alto
-	// 				);
-	// 				elementos.ambientes.push({
-	// 					nombre: ambiente.nombre,
-	// 					tipo: "pabellon_libre",
-	// 					corners: ambienteData.corners,
-	// 					realCorners: ambienteData.realCorners,
-	// 				});
-	// 				currentYSecundaria += ambiente.alto;
-	// 			});
-	// 		}
-
-	// 		// BLOQUE CENTRAL: Cancha (con rotación automática si no cabe) + Cocina/Comedor - solo piso 1
-	// 		// ✅ RENDERIZAR CUADRANTE INTERIOR CON DISTRIBUCIÓN INTELIGENTE (solo piso 1)
-	// 		if (currentFloor === 1 && floorData.distribucionCuadrante) {
-	// 			const dist = floorData.distribucionCuadrante;
-	// 			const cuadrante = floorData.cuadranteInterior;
-
-	// 			// ✅ RENDERIZAR CANCHA (centrada en el cuadrante)
+	// 			// Renderizar cancha
 	// 			if (dist.cancha) {
 	// 				const canchaX = dist.cancha.x;
 	// 				const canchaY = dist.cancha.y;
@@ -6269,9 +9050,9 @@ EOF
 	// 				};
 	// 			}
 
-	// 			// ✅ RENDERIZAR AMBIENTES BOTTOM (con posiciones calculadas)
-	// 			if (dist.ambientesBottom.length > 0) {
-	// 				dist.ambientesBottom.forEach((ambiente) => {
+	// 			// Renderizar ambientes alrededor de la cancha
+	// 			const renderAmbientes = (ambientesList) => {
+	// 				ambientesList.forEach((ambiente) => {
 	// 					const x =
 	// 						origin.east +
 	// 						dirX.east * ambiente.x +
@@ -6291,92 +9072,35 @@ EOF
 	// 						nombre: ambiente.nombre,
 	// 						corners: ambienteData.corners,
 	// 						realCorners: ambienteData.realCorners,
-	// 						posicion: "bottom",
+	// 						posicion: ambiente.posicion || "center",
 	// 					});
 	// 				});
-	// 			}
+	// 			};
 
-	// 			// ✅ RENDERIZAR AMBIENTES TOP (con posiciones calculadas)
-	// 			if (dist.ambientesTop.length > 0) {
-	// 				dist.ambientesTop.forEach((ambiente) => {
-	// 					const x =
-	// 						origin.east +
-	// 						dirX.east * ambiente.x +
-	// 						dirY.east * ambiente.y;
-	// 					const y =
-	// 						origin.north +
-	// 						dirX.north * ambiente.x +
-	// 						dirY.north * ambiente.y;
-
-	// 					const ambienteData = createRoomCorners(
-	// 						x,
-	// 						y,
-	// 						ambiente.ancho,
-	// 						ambiente.alto
-	// 					);
-	// 					elementos.laterales.push({
-	// 						nombre: ambiente.nombre,
-	// 						corners: ambienteData.corners,
-	// 						realCorners: ambienteData.realCorners,
-	// 						posicion: "top",
-	// 					});
-	// 				});
-	// 			}
-
-	// 			// ✅ RENDERIZAR AMBIENTES LEFT (con posiciones calculadas)
-	// 			if (dist.ambientesLeft.length > 0) {
-	// 				dist.ambientesLeft.forEach((ambiente) => {
-	// 					const x =
-	// 						origin.east +
-	// 						dirX.east * ambiente.x +
-	// 						dirY.east * ambiente.y;
-	// 					const y =
-	// 						origin.north +
-	// 						dirX.north * ambiente.x +
-	// 						dirY.north * ambiente.y;
-
-	// 					const ambienteData = createRoomCorners(
-	// 						x,
-	// 						y,
-	// 						ambiente.ancho,
-	// 						ambiente.alto
-	// 					);
-	// 					elementos.laterales.push({
-	// 						nombre: ambiente.nombre,
-	// 						corners: ambienteData.corners,
-	// 						realCorners: ambienteData.realCorners,
-	// 						posicion: "left",
-	// 					});
-	// 				});
-	// 			}
-
-	// 			// ✅ RENDERIZAR AMBIENTES RIGHT (con posiciones calculadas)
-	// 			if (dist.ambientesRight.length > 0) {
-	// 				dist.ambientesRight.forEach((ambiente) => {
-	// 					const x =
-	// 						origin.east +
-	// 						dirX.east * ambiente.x +
-	// 						dirY.east * ambiente.y;
-	// 					const y =
-	// 						origin.north +
-	// 						dirX.north * ambiente.x +
-	// 						dirY.north * ambiente.y;
-
-	// 					const ambienteData = createRoomCorners(
-	// 						x,
-	// 						y,
-	// 						ambiente.ancho,
-	// 						ambiente.alto
-	// 					);
-	// 					elementos.laterales.push({
-	// 						nombre: ambiente.nombre,
-	// 						corners: ambienteData.corners,
-	// 						realCorners: ambienteData.realCorners,
-	// 						posicion: "right",
-	// 					});
-	// 				});
-	// 			}
+	// 			if (dist.ambientesBottom?.length > 0)
+	// 				renderAmbientes(dist.ambientesBottom);
+	// 			if (dist.ambientesTop?.length > 0)
+	// 				renderAmbientes(dist.ambientesTop);
+	// 			if (dist.ambientesLeft?.length > 0)
+	// 				renderAmbientes(dist.ambientesLeft);
+	// 			if (dist.ambientesRight?.length > 0)
+	// 				renderAmbientes(dist.ambientesRight);
 	// 		}
+	// 	}
+
+	// 	if (distribution) {
+	// 		dispatch(
+	// 			setVista3DData({
+	// 				elementos: elementos,
+	// 				coordinates: coordinates,
+	// 				maxRectangle: maxRectangle,
+	// 				distribution: distribution,
+	// 				capacityInfo: capacityInfo,
+	// 				currentFloor: currentFloor,
+	// 				totalFloors: totalFloors,
+	// 				layoutMode: layoutMode,
+	// 			})
+	// 		);
 	// 	}
 
 	// 	return {
@@ -6387,7 +9111,710 @@ EOF
 	// 		bounds: { minEast, maxEast, minNorth, maxNorth, scale },
 	// 	};
 	// };
+	const renderTwoQuadrantsVerticalStack = (
+		floorData,
+		distribution,
+		origin,
+		dirX,
+		dirY,
+		rectWidth,
+		rectHeight,
+		createRoomCorners,
+		elementos
+	) => {
+		// Cancha arriba, aulas abajo
+		const canchaSpace = distribution.canchaQuadrant.dimensions;
+		const aulasSpace = distribution.aulasQuadrant.dimensions;
 
+		// El cuadrante de aulas empieza después de la cancha
+		const aulasOrigin = {
+			east: origin.east + dirY.east * canchaSpace.height,
+			north: origin.north + dirY.north * canchaSpace.height,
+		};
+
+		// ========================================
+		// PABELLÓN INICIAL (abajo del cuadrante de aulas, horizontal)
+		// ========================================
+		let currentXInicial = CIRCULACION_LATERAL;
+
+		for (let i = 0; i < floorData.inicial; i++) {
+			const x = aulasOrigin.east + dirX.east * currentXInicial;
+			const y = aulasOrigin.north + dirX.north * currentXInicial;
+
+			const aulaData = createRoomCorners(
+				x,
+				y,
+				CLASSROOM_WIDTH,
+				CLASSROOM_HEIGHT
+			);
+			elementos.inicial.push({
+				corners: aulaData.corners,
+				realCorners: aulaData.realCorners,
+			});
+			currentXInicial += CLASSROOM_WIDTH;
+
+			// Escalera y baño después de la primera aula
+			if (i === 0 && floorData.inicial > 0 && totalFloors > 1) {
+				const xEsc = aulasOrigin.east + dirX.east * currentXInicial;
+				const yEsc = aulasOrigin.north + dirX.north * currentXInicial;
+
+				const escaleraData = createRoomCorners(
+					xEsc,
+					yEsc,
+					ESCALERA_WIDTH,
+					ESCALERA_HEIGHT
+				);
+				elementos.escaleras.push({
+					nivel: "Inicial",
+					corners: escaleraData.corners,
+					realCorners: escaleraData.realCorners,
+				});
+				currentXInicial += ESCALERA_WIDTH;
+
+				if (currentFloor === 1) {
+					const xBano =
+						aulasOrigin.east + dirX.east * currentXInicial;
+					const yBano =
+						aulasOrigin.north + dirX.north * currentXInicial;
+
+					const banoData = createRoomCorners(
+						xBano,
+						yBano,
+						BANO_WIDTH,
+						BANO_HEIGHT
+					);
+					elementos.banos.push({
+						nivel: "Inicial",
+						corners: banoData.corners,
+						realCorners: banoData.realCorners,
+					});
+					currentXInicial += BANO_WIDTH;
+				}
+			}
+		}
+
+		// ========================================
+		// PABELLÓN PRIMARIA (izquierda del cuadrante de aulas, vertical)
+		// ========================================
+		const startYPrimaria = CLASSROOM_HEIGHT + CIRCULACION_ENTRE_PABELLONES;
+		let currentYPrimaria = startYPrimaria;
+
+		for (let i = 0; i < floorData.primaria; i++) {
+			const x = aulasOrigin.east + dirY.east * currentYPrimaria;
+			const y = aulasOrigin.north + dirY.north * currentYPrimaria;
+
+			const aulaData = createRoomCorners(
+				x,
+				y,
+				CLASSROOM_WIDTH,
+				CLASSROOM_HEIGHT
+			);
+			elementos.primaria.push({
+				corners: aulaData.corners,
+				realCorners: aulaData.realCorners,
+			});
+			currentYPrimaria += CLASSROOM_HEIGHT;
+
+			if (i === 0 && floorData.primaria > 0 && totalFloors > 1) {
+				const xEsc = aulasOrigin.east + dirY.east * currentYPrimaria;
+				const yEsc = aulasOrigin.north + dirY.north * currentYPrimaria;
+
+				const escaleraData = createRoomCorners(
+					xEsc,
+					yEsc,
+					CLASSROOM_WIDTH,
+					ESCALERA_HEIGHT
+				);
+				elementos.escaleras.push({
+					nivel: "Primaria",
+					corners: escaleraData.corners,
+					realCorners: escaleraData.realCorners,
+				});
+				currentYPrimaria += ESCALERA_HEIGHT;
+
+				if (currentFloor === 1) {
+					const xBano =
+						aulasOrigin.east + dirY.east * currentYPrimaria;
+					const yBano =
+						aulasOrigin.north + dirY.north * currentYPrimaria;
+
+					const banoData = createRoomCorners(
+						xBano,
+						yBano,
+						CLASSROOM_WIDTH,
+						BANO_HEIGHT
+					);
+					elementos.banos.push({
+						nivel: "Primaria",
+						corners: banoData.corners,
+						realCorners: banoData.realCorners,
+					});
+					currentYPrimaria += BANO_HEIGHT;
+				}
+			}
+		}
+
+		// ========================================
+		// PABELLÓN SECUNDARIA (derecha del cuadrante de aulas, vertical)
+		// ========================================
+		let currentYSecundaria = startYPrimaria;
+
+		for (let i = 0; i < floorData.secundaria; i++) {
+			const x =
+				aulasOrigin.east +
+				dirX.east * (aulasSpace.width - CLASSROOM_WIDTH) +
+				dirY.east * currentYSecundaria;
+			const y =
+				aulasOrigin.north +
+				dirX.north * (aulasSpace.width - CLASSROOM_WIDTH) +
+				dirY.north * currentYSecundaria;
+
+			const aulaData = createRoomCorners(
+				x,
+				y,
+				CLASSROOM_WIDTH,
+				CLASSROOM_HEIGHT
+			);
+			elementos.secundaria.push({
+				corners: aulaData.corners,
+				realCorners: aulaData.realCorners,
+			});
+			currentYSecundaria += CLASSROOM_HEIGHT;
+
+			if (i === 0 && floorData.secundaria > 0 && totalFloors > 1) {
+				const xEsc =
+					aulasOrigin.east +
+					dirX.east * (aulasSpace.width - CLASSROOM_WIDTH) +
+					dirY.east * currentYSecundaria;
+				const yEsc =
+					aulasOrigin.north +
+					dirX.north * (aulasSpace.width - CLASSROOM_WIDTH) +
+					dirY.north * currentYSecundaria;
+
+				const escaleraData = createRoomCorners(
+					xEsc,
+					yEsc,
+					CLASSROOM_WIDTH,
+					ESCALERA_HEIGHT
+				);
+				elementos.escaleras.push({
+					nivel: "Secundaria",
+					corners: escaleraData.corners,
+					realCorners: escaleraData.realCorners,
+				});
+				currentYSecundaria += ESCALERA_HEIGHT;
+
+				if (currentFloor === 1) {
+					const xBano =
+						aulasOrigin.east +
+						dirX.east * (aulasSpace.width - CLASSROOM_WIDTH) +
+						dirY.east * currentYSecundaria;
+					const yBano =
+						aulasOrigin.north +
+						dirX.north * (aulasSpace.width - CLASSROOM_WIDTH) +
+						dirY.north * currentYSecundaria;
+
+					const banoData = createRoomCorners(
+						xBano,
+						yBano,
+						CLASSROOM_WIDTH,
+						BANO_HEIGHT
+					);
+					elementos.banos.push({
+						nivel: "Secundaria",
+						corners: banoData.corners,
+						realCorners: banoData.realCorners,
+					});
+					currentYSecundaria += BANO_HEIGHT;
+				}
+			}
+		}
+
+		// ========================================
+		// AMBIENTES SUPERIORES (piso 2 si no caben en piso 1)
+		// ========================================
+		if (
+			floorData.ambientesSuperiores &&
+			floorData.ambientesSuperiores.length > 0
+		) {
+			// Los ambientes superiores van distribuidos donde haya espacio
+			// En modo dos cuadrantes, generalmente van al piso 2
+			const totalAmbientesWidth = floorData.ambientesSuperiores.reduce(
+				(sum, amb) => sum + amb.ancho,
+				0
+			);
+			const startX = (aulasSpace.width - totalAmbientesWidth) / 2;
+			let currentX = startX;
+
+			floorData.ambientesSuperiores.forEach((ambiente) => {
+				const x =
+					aulasOrigin.east +
+					dirX.east * currentX +
+					dirY.east * (aulasSpace.height - ambiente.alto);
+				const y =
+					aulasOrigin.north +
+					dirX.north * currentX +
+					dirY.north * (aulasSpace.height - ambiente.alto);
+
+				const ambienteData = createRoomCorners(
+					x,
+					y,
+					ambiente.ancho,
+					ambiente.alto
+				);
+				elementos.ambientes.push({
+					nombre: ambiente.nombre,
+					tipo: "superior",
+					corners: ambienteData.corners,
+					realCorners: ambienteData.realCorners,
+				});
+				currentX += ambiente.ancho;
+			});
+		}
+	};
+
+	const renderCanchaInSeparateQuadrant = (
+		distribution,
+		origin,
+		dirX,
+		dirY,
+		rectWidth,
+		rectHeight,
+		createRoomCorners,
+		elementos
+	) => {
+		if (currentFloor !== 1) return; // La cancha solo está en el piso 1
+
+		const canchaSpace = distribution.canchaQuadrant.dimensions;
+		const orientation = distribution.orientation;
+		const CANCHA_WIDTH = 28;
+		const CANCHA_HEIGHT = 15;
+
+		let canchaOrigin;
+
+		if (orientation === "vertical-stack") {
+			// Cancha arriba: centrar en el cuadrante superior
+			const canchaX = (canchaSpace.width - CANCHA_WIDTH) / 2;
+			const canchaY = (canchaSpace.height - CANCHA_HEIGHT) / 2;
+
+			canchaOrigin = {
+				east: origin.east + dirX.east * canchaX + dirY.east * canchaY,
+				north:
+					origin.north + dirX.north * canchaX + dirY.north * canchaY,
+			};
+		} else {
+			// horizontal-stack: Cancha a la izquierda
+			const canchaX = (canchaSpace.width - CANCHA_WIDTH) / 2;
+			const canchaY = (canchaSpace.height - CANCHA_HEIGHT) / 2;
+
+			canchaOrigin = {
+				east: origin.east + dirX.east * canchaX + dirY.east * canchaY,
+				north:
+					origin.north + dirX.north * canchaX + dirY.north * canchaY,
+			};
+		}
+
+		const canchaData = createRoomCorners(
+			canchaOrigin.east,
+			canchaOrigin.north,
+			CANCHA_WIDTH,
+			CANCHA_HEIGHT
+		);
+
+		elementos.cancha = {
+			corners: canchaData.corners,
+			realCorners: canchaData.realCorners,
+			rotada: false,
+		};
+
+		// También necesitamos guardarlo en canchaSVG para que se renderice
+		return canchaData.corners;
+	};
+
+	const renderTwoQuadrantsHorizontalStack = (
+		floorData,
+		distribution,
+		origin,
+		dirX,
+		dirY,
+		rectWidth,
+		rectHeight,
+		createRoomCorners,
+		elementos
+	) => {
+		// Cancha a la izquierda, aulas a la derecha
+		const canchaSpace = distribution.canchaQuadrant.dimensions;
+		const aulasSpace = distribution.aulasQuadrant.dimensions;
+
+		// El cuadrante de aulas empieza después de la cancha (desplazado en X)
+		const aulasOrigin = {
+			east: origin.east + dirX.east * canchaSpace.width,
+			north: origin.north + dirX.north * canchaSpace.width,
+		};
+
+		// ========================================
+		// PABELLÓN INICIAL (abajo del cuadrante de aulas, horizontal)
+		// ========================================
+		let currentXInicial = CIRCULACION_LATERAL;
+
+		for (let i = 0; i < floorData.inicial; i++) {
+			const x = aulasOrigin.east + dirX.east * currentXInicial;
+			const y = aulasOrigin.north + dirX.north * currentXInicial;
+
+			const aulaData = createRoomCorners(
+				x,
+				y,
+				CLASSROOM_WIDTH,
+				CLASSROOM_HEIGHT
+			);
+			elementos.inicial.push({
+				corners: aulaData.corners,
+				realCorners: aulaData.realCorners,
+			});
+			currentXInicial += CLASSROOM_WIDTH;
+
+			// Escalera y baño después de la primera aula
+			if (i === 0 && floorData.inicial > 0 && totalFloors > 1) {
+				const xEsc = aulasOrigin.east + dirX.east * currentXInicial;
+				const yEsc = aulasOrigin.north + dirX.north * currentXInicial;
+
+				const escaleraData = createRoomCorners(
+					xEsc,
+					yEsc,
+					ESCALERA_WIDTH,
+					ESCALERA_HEIGHT
+				);
+				elementos.escaleras.push({
+					nivel: "Inicial",
+					corners: escaleraData.corners,
+					realCorners: escaleraData.realCorners,
+				});
+				currentXInicial += ESCALERA_WIDTH;
+
+				if (currentFloor === 1) {
+					const xBano =
+						aulasOrigin.east + dirX.east * currentXInicial;
+					const yBano =
+						aulasOrigin.north + dirX.north * currentXInicial;
+
+					const banoData = createRoomCorners(
+						xBano,
+						yBano,
+						BANO_WIDTH,
+						BANO_HEIGHT
+					);
+					elementos.banos.push({
+						nivel: "Inicial",
+						corners: banoData.corners,
+						realCorners: banoData.realCorners,
+					});
+					currentXInicial += BANO_WIDTH;
+				}
+			}
+		}
+
+		// Ambientes en pabellón inicial
+		const ambientesInicialEnPabellon =
+			distribution.ambientesEnPabellones?.filter(
+				(a) => a.pabellon === "inicial"
+			) || [];
+
+		if (
+			ambientesInicialEnPabellon.length > 0 &&
+			currentFloor === 1 &&
+			floorData.inicial > 0
+		) {
+			ambientesInicialEnPabellon.forEach((ambiente) => {
+				const x = aulasOrigin.east + dirX.east * currentXInicial;
+				const y = aulasOrigin.north + dirX.north * currentXInicial;
+
+				const ambienteData = createRoomCorners(
+					x,
+					y,
+					ambiente.ancho,
+					ambiente.alto
+				);
+				elementos.ambientes.push({
+					nombre: ambiente.nombre,
+					tipo: "pabellon",
+					corners: ambienteData.corners,
+					realCorners: ambienteData.realCorners,
+				});
+				currentXInicial += ambiente.ancho;
+			});
+		}
+
+		// ========================================
+		// PABELLÓN PRIMARIA (izquierda del cuadrante de aulas, vertical)
+		// ========================================
+		const startYPrimaria = CLASSROOM_HEIGHT + CIRCULACION_ENTRE_PABELLONES;
+		let currentYPrimaria = startYPrimaria;
+
+		for (let i = 0; i < floorData.primaria; i++) {
+			const x = aulasOrigin.east + dirY.east * currentYPrimaria;
+			const y = aulasOrigin.north + dirY.north * currentYPrimaria;
+
+			const aulaData = createRoomCorners(
+				x,
+				y,
+				CLASSROOM_WIDTH,
+				CLASSROOM_HEIGHT
+			);
+			elementos.primaria.push({
+				corners: aulaData.corners,
+				realCorners: aulaData.realCorners,
+			});
+			currentYPrimaria += CLASSROOM_HEIGHT;
+
+			if (i === 0 && floorData.primaria > 0 && totalFloors > 1) {
+				const xEsc = aulasOrigin.east + dirY.east * currentYPrimaria;
+				const yEsc = aulasOrigin.north + dirY.north * currentYPrimaria;
+
+				const escaleraData = createRoomCorners(
+					xEsc,
+					yEsc,
+					CLASSROOM_WIDTH,
+					ESCALERA_HEIGHT
+				);
+				elementos.escaleras.push({
+					nivel: "Primaria",
+					corners: escaleraData.corners,
+					realCorners: escaleraData.realCorners,
+				});
+				currentYPrimaria += ESCALERA_HEIGHT;
+
+				if (currentFloor === 1) {
+					const xBano =
+						aulasOrigin.east + dirY.east * currentYPrimaria;
+					const yBano =
+						aulasOrigin.north + dirY.north * currentYPrimaria;
+
+					const banoData = createRoomCorners(
+						xBano,
+						yBano,
+						CLASSROOM_WIDTH,
+						BANO_HEIGHT
+					);
+					elementos.banos.push({
+						nivel: "Primaria",
+						corners: banoData.corners,
+						realCorners: banoData.realCorners,
+					});
+					currentYPrimaria += BANO_HEIGHT;
+				}
+			}
+		}
+
+		// Ambientes en pabellón primaria
+		const ambientesPrimariaEnPabellon =
+			distribution.ambientesEnPabellones?.filter(
+				(a) => a.pabellon === "primaria"
+			) || [];
+
+		if (
+			ambientesPrimariaEnPabellon.length > 0 &&
+			currentFloor === 1 &&
+			floorData.primaria > 0
+		) {
+			ambientesPrimariaEnPabellon.forEach((ambiente) => {
+				const x = aulasOrigin.east + dirY.east * currentYPrimaria;
+				const y = aulasOrigin.north + dirY.north * currentYPrimaria;
+
+				const ambienteData = createRoomCorners(
+					x,
+					y,
+					ambiente.ancho,
+					ambiente.alto
+				);
+				elementos.ambientes.push({
+					nombre: ambiente.nombre,
+					tipo: "pabellon",
+					corners: ambienteData.corners,
+					realCorners: ambienteData.realCorners,
+				});
+				currentYPrimaria += ambiente.alto;
+			});
+		}
+
+		// ========================================
+		// PABELLÓN SECUNDARIA (derecha del cuadrante de aulas, vertical)
+		// ========================================
+		let currentYSecundaria = startYPrimaria;
+
+		for (let i = 0; i < floorData.secundaria; i++) {
+			const x =
+				aulasOrigin.east +
+				dirX.east * (aulasSpace.width - CLASSROOM_WIDTH) +
+				dirY.east * currentYSecundaria;
+			const y =
+				aulasOrigin.north +
+				dirX.north * (aulasSpace.width - CLASSROOM_WIDTH) +
+				dirY.north * currentYSecundaria;
+
+			const aulaData = createRoomCorners(
+				x,
+				y,
+				CLASSROOM_WIDTH,
+				CLASSROOM_HEIGHT
+			);
+			elementos.secundaria.push({
+				corners: aulaData.corners,
+				realCorners: aulaData.realCorners,
+			});
+			currentYSecundaria += CLASSROOM_HEIGHT;
+
+			if (i === 0 && floorData.secundaria > 0 && totalFloors > 1) {
+				const xEsc =
+					aulasOrigin.east +
+					dirX.east * (aulasSpace.width - CLASSROOM_WIDTH) +
+					dirY.east * currentYSecundaria;
+				const yEsc =
+					aulasOrigin.north +
+					dirX.north * (aulasSpace.width - CLASSROOM_WIDTH) +
+					dirY.north * currentYSecundaria;
+
+				const escaleraData = createRoomCorners(
+					xEsc,
+					yEsc,
+					CLASSROOM_WIDTH,
+					ESCALERA_HEIGHT
+				);
+				elementos.escaleras.push({
+					nivel: "Secundaria",
+					corners: escaleraData.corners,
+					realCorners: escaleraData.realCorners,
+				});
+				currentYSecundaria += ESCALERA_HEIGHT;
+
+				if (currentFloor === 1) {
+					const xBano =
+						aulasOrigin.east +
+						dirX.east * (aulasSpace.width - CLASSROOM_WIDTH) +
+						dirY.east * currentYSecundaria;
+					const yBano =
+						aulasOrigin.north +
+						dirX.north * (aulasSpace.width - CLASSROOM_WIDTH) +
+						dirY.north * currentYSecundaria;
+
+					const banoData = createRoomCorners(
+						xBano,
+						yBano,
+						CLASSROOM_WIDTH,
+						BANO_HEIGHT
+					);
+					elementos.banos.push({
+						nivel: "Secundaria",
+						corners: banoData.corners,
+						realCorners: banoData.realCorners,
+					});
+					currentYSecundaria += BANO_HEIGHT;
+				}
+			}
+		}
+
+		// Ambientes en pabellón secundaria
+		const ambientesSecundariaEnPabellon =
+			distribution.ambientesEnPabellones?.filter(
+				(a) => a.pabellon === "secundaria"
+			) || [];
+
+		if (
+			ambientesSecundariaEnPabellon.length > 0 &&
+			currentFloor === 1 &&
+			floorData.secundaria > 0
+		) {
+			ambientesSecundariaEnPabellon.forEach((ambiente) => {
+				const x =
+					aulasOrigin.east +
+					dirX.east * (aulasSpace.width - CLASSROOM_WIDTH) +
+					dirY.east * currentYSecundaria;
+				const y =
+					aulasOrigin.north +
+					dirX.north * (aulasSpace.width - CLASSROOM_WIDTH) +
+					dirY.north * currentYSecundaria;
+
+				const ambienteData = createRoomCorners(
+					x,
+					y,
+					ambiente.ancho,
+					ambiente.alto
+				);
+				elementos.ambientes.push({
+					nombre: ambiente.nombre,
+					tipo: "pabellon",
+					corners: ambienteData.corners,
+					realCorners: ambienteData.realCorners,
+				});
+				currentYSecundaria += ambiente.alto;
+			});
+		}
+
+		// ========================================
+		// AMBIENTES SUPERIORES (en la parte superior del cuadrante de aulas)
+		// ========================================
+		if (
+			floorData.ambientesSuperiores &&
+			floorData.ambientesSuperiores.length > 0
+		) {
+			const totalAmbientesWidth = floorData.ambientesSuperiores.reduce(
+				(sum, amb) => sum + amb.ancho,
+				0
+			);
+			const startX = (aulasSpace.width - totalAmbientesWidth) / 2;
+			let currentX = startX;
+
+			floorData.ambientesSuperiores.forEach((ambiente) => {
+				const x =
+					aulasOrigin.east +
+					dirX.east * currentX +
+					dirY.east * (aulasSpace.height - ambiente.alto);
+				const y =
+					aulasOrigin.north +
+					dirX.north * currentX +
+					dirY.north * (aulasSpace.height - ambiente.alto);
+
+				const ambienteData = createRoomCorners(
+					x,
+					y,
+					ambiente.ancho,
+					ambiente.alto
+				);
+				elementos.ambientes.push({
+					nombre: ambiente.nombre,
+					tipo: "superior",
+					corners: ambienteData.corners,
+					realCorners: ambienteData.realCorners,
+				});
+				currentX += ambiente.ancho;
+			});
+		}
+
+		// ========================================
+		// ENTRADA (solo en piso 1, en la parte superior)
+		// ========================================
+		if (currentFloor === 1) {
+			const entradaX = (aulasSpace.width - ENTRADA_WIDTH) / 2;
+			const entradaY = aulasSpace.height - CLASSROOM_HEIGHT;
+
+			const xEnt =
+				aulasOrigin.east + dirX.east * entradaX + dirY.east * entradaY;
+			const yEnt =
+				aulasOrigin.north +
+				dirX.north * entradaX +
+				dirY.north * entradaY;
+
+			const entradaData = createRoomCorners(
+				xEnt,
+				yEnt,
+				ENTRADA_WIDTH,
+				CLASSROOM_HEIGHT
+			);
+			elementos.entrada = {
+				corners: entradaData.corners,
+				realCorners: entradaData.realCorners,
+			};
+		}
+	};
 	const { points, rectangleSVG, elementos, pabellones, bounds, canchaSVG } =
 		convertToSVG();
 
@@ -6411,7 +9838,7 @@ EOF
 				{maxRectangle && (
 					<Grid
 						container
-						spacing={40}
+						spacing={100}
 						sx={{
 							padding: 5,
 						}}
@@ -6423,7 +9850,7 @@ EOF
 								direction="column"
 								spacing={1.5}
 								alignItems="flex-start"
-								sx={{ paddingLeft: 4 }}
+								sx={{ paddingLeft: 4, paddingTop: 5 }}
 							>
 								<Grid item>
 									<div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
@@ -6455,7 +9882,7 @@ EOF
 								container
 								direction="column"
 								spacing={2}
-								sx={{ paddingTop: 5 }}
+								sx={{ paddingTop: 10 }}
 							>
 								{/* Fila de botones Horizontal y Vertical */}
 								<Grid item>
@@ -6526,7 +9953,7 @@ EOF
 												<Upload className="w-4 h-4" />
 												Exportar DXF 2D
 											</Button> */}
-								<Button
+								{/* <Button
 									// onClick={() =>
 									// 	exportToDXF(true)
 									// }
@@ -6536,7 +9963,7 @@ EOF
 								>
 									<Upload className="w-4 h-4" />
 									Exportar 3D
-								</Button>
+								</Button> */}
 							</Grid>
 						</Grid>
 					</Grid>

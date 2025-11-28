@@ -38,6 +38,7 @@ import * as THREE from "three";
 import { TestExport3D } from "../Test/TestExport3D";
 import ViewControls from "./components/InitConfig/ViewControls";
 import CompassHUD from "./components/Terrain/CompassHUD";
+import View3D from "./View3D";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter";
 import { OBJExporter } from "three/examples/jsm/exporters/OBJExporter.js";
 const UTM_SCALE_FACTOR = 1000;
@@ -54,12 +55,13 @@ export default function Plan3D({ state, view, school, aspect }) {
 	}, []);
 
 	return view.view === "3D" ? (
-		<SceneX
-			school={school}
-			view={view}
-			space={space}
-			spaceEntrance={spaceEntrance}
-		/>
+		// <SceneX
+		// 	school={school}
+		// 	view={view}
+		// 	space={space}
+		// 	spaceEntrance={spaceEntrance}
+		// />
+		<View3D school={school} />
 	) : (
 		//<FloorPlanX school={school} view={view} />
 		//<AppTest />

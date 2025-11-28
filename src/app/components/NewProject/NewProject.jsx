@@ -1,5 +1,5 @@
-import { useState, useRef } from "react";
-import { Link as RouterLink } from "react-router-dom";
+import { useState, useRef, useEffect } from "react";
+import { Link as RouterLink, useNavigate } from "react-router-dom";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import styled from "@mui/material/styles/styled";
@@ -14,11 +14,13 @@ import DialogActions from "@mui/material/DialogActions";
 import IconButton from "@mui/material/IconButton";
 import AddOutlinedIcon from "@mui/icons-material/AddOutlined";
 import CloseIcon from "@mui/icons-material/Close";
+import Swal from "sweetalert2";
 
 const NewProject = ({ onRow, data, school }) => {
 	const [open, setOpen] = useState(false);
 	const [newProject, setShow] = useState({ show: true });
 	const formRef = useRef(null);
+	const navigate = useNavigate();
 
 	const handleShow = (value) => {
 		setShow(value);
@@ -26,6 +28,26 @@ const NewProject = ({ onRow, data, school }) => {
 
 	const handleOpen = () => setOpen(true);
 	const handleClose = () => setOpen(false);
+
+	useEffect(() => {
+		if (!newProject.show && newProject.id) {
+			Swal.fire({
+				title: "Éxito",
+				text: "El proyecto ha sido creado",
+				icon: "success",
+				showCancelButton: true,
+				confirmButtonText: "Ir al proyecto",
+				cancelButtonText: "Cerrar",
+				confirmButtonColor: "#1976d2",
+				cancelButtonColor: "#d32f2f",
+			}).then((result) => {
+				if (result.isConfirmed) {
+					navigate(`/proyecto/colegios/${newProject.id}`);
+				}
+				handleClose(); // Cierra el modal en cualquier caso
+			});
+		}
+	}, [newProject.show, newProject.id]);
 
 	return (
 		<>

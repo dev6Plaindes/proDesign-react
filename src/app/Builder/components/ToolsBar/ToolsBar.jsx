@@ -27,6 +27,7 @@ import Button2D from "./Buttons/Button2D";
 // import ButtonSave from "./Buttons/ButtonSave";
 import "./styles.css";
 import Settings from "../Settings/Settings";
+import { requestExport } from "../../../../redux/features/exportSlice";
 
 export default function ToolsBar({
 	state,
@@ -47,18 +48,13 @@ export default function ToolsBar({
 
 	const handleColorWall = debounce((value) => baseFn(value));
 
-	// const handleExportChange = (event) => {
-	// 	const value = event.target.value;
+	const handleExportChange = (event) => {
+		const exportType = event.target.value; // 'json', 'excel', etc.
 
-	// 	if (value === "EXPORTAR_JSON") {
-	// 		dispatch(triggerExport()); // ✅ Enviar señal para exportar
-	// 	} else if (value === "analyze") {
-	// 		console.log("Analizar escena");
-	// 	}
-
-	// 	// Resetear el select
-	// 	event.target.value = "EXPORTAR";
-	// };
+		if (exportType) {
+			dispatch(requestExport(exportType));
+		}
+	};
 
 	return (
 		<Box
@@ -78,7 +74,7 @@ export default function ToolsBar({
 			<nav className="greedy">
 				{/* width: 100% */}
 				<ul className="links">
-					<li>
+					{/* <li>
 						<Button
 							onClick={() =>
 								dispatch(
@@ -89,7 +85,7 @@ export default function ToolsBar({
 							<PlayIcon htmlColor="#3699FF" />
 							&nbsp; Play
 						</Button>
-					</li>
+					</li> */}
 
 					<li>
 						<Button2D handleViewState={handleViewState} />
@@ -128,11 +124,10 @@ export default function ToolsBar({
 								margin: "0.3rem 0.4rem",
 								backgroundColor: "#E4E6EF",
 							}}
+							onChange={handleExportChange}
 						>
 							<option value="EXPORTAR">EXPORTAR</option>
-							<option value="EXPORTAR_JSON">
-								📄 Exportar JSON
-							</option>
+							<option value="json">📄 Exportar JSON</option>
 							<option value="analyze">🔍 Analizar Escena</option>
 							<option value="obj">OBJ (Mesh)</option>
 
