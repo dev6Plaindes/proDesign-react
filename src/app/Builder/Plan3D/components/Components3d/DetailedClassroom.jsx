@@ -1,6 +1,104 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { Text } from "@react-three/drei";
+import { useLoader } from "@react-three/fiber";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import * as THREE from "three";
+
+// ✅ Componente de Ventana Deslizante
+const WindowSliding = ({ position, rotation }) => {
+	const { nodes, materials } = useLoader(
+		GLTFLoader,
+		"/models/sliding_window/scene.gltf"
+	);
+
+	return (
+		<group
+			position={position}
+			rotation={rotation}
+			scale={[0.02, 0.02, 0.02]}
+		>
+			<mesh
+				geometry={nodes["Object_4"].geometry}
+				material={materials["Material_35"]}
+				castShadow
+			/>
+			<mesh
+				geometry={nodes["Object_8"].geometry}
+				material={materials["2_-_Default"]}
+			/>
+			<mesh
+				geometry={nodes["Object_9"].geometry}
+				material={materials["3_-_Default"]}
+			/>
+			<mesh
+				geometry={nodes["Object_11"].geometry}
+				material={materials["5_-_Default"]}
+			/>
+			<mesh
+				geometry={nodes["Object_12"].geometry}
+				material={materials["standard_alumini"]}
+			/>
+			<mesh
+				geometry={nodes["Object_13"].geometry}
+				material={materials["Material_46"]}
+			/>
+			<mesh
+				geometry={nodes["Object_16"].geometry}
+				material={materials["5_-_Default"]}
+			/>
+			<mesh
+				geometry={nodes["Object_17"].geometry}
+				material={materials["Material_57"]}
+			/>
+			<mesh
+				geometry={nodes["Object_18"].geometry}
+				material={materials["standard_alumini"]}
+			/>
+		</group>
+	);
+};
+
+// ✅ Componente de Puerta de Madera
+const DoorWood = ({ position, rotation }) => {
+	const { nodes, materials } = useLoader(
+		GLTFLoader,
+		"/models/wood_door/scene.gltf"
+	);
+
+	return (
+		<group
+			position={position}
+			rotation={rotation}
+			scale={[1.4, 1.2, 1.4]} // Ajusta según el tamaño de tu modelo
+		>
+			<mesh
+				geometry={nodes["Object_8"].geometry}
+				material={materials["DOR0001_Wood"]}
+				castShadow
+			/>
+			<mesh
+				geometry={nodes["Object_9"].geometry}
+				material={materials["DOR0001_Metal_Handle_Plate"]}
+			/>
+			<mesh
+				geometry={nodes["Object_10"].geometry}
+				material={materials["DOR0001_Metal_Screw"]}
+			/>
+			<mesh
+				geometry={nodes["Object_12"].geometry}
+				material={materials["DOR0001_Plastic_Fram"]}
+			/>
+			<mesh
+				geometry={nodes["Object_13"].geometry}
+				material={materials["DOR0001_Rubber_Kit"]}
+			/>
+			<mesh
+				geometry={nodes["Object_15"].geometry}
+				material={materials["DOR0001_Metal_Face_Plate"]}
+			/>
+		</group>
+	);
+};
 
 const AulaDetallada = ({
 	corners,
@@ -10,8 +108,14 @@ const AulaDetallada = ({
 	level,
 	collegeCenter,
 	onClick,
-	isTopFloor = false, // ✅ NUEVO
-	corridorSide = null, // ✅ NUEVO: 'left', 'right', 'top', 'bottom'
+	isTopFloor = false,
+	corridorSide = null,
+	customRoofPosition = null, // [x, y, z] relativo al centro del aula
+	customRoofRotation = null, // [x, y, z] en radianes
+	customRoofOrientation = null,
+	customRoofWidth = null, // Ancho custom del techo
+	customRoofDepth = null,
+	hasFlatRoof = false,
 }) => {
 	const [hovered, setHovered] = useState(false);
 
@@ -38,36 +142,30 @@ const AulaDetallada = ({
 			corners[1].east - corners[0].east
 		);
 
-		// ✅ CALCULAR ORIENTACIÓN DE LA PUERTA
-		let doorSide = "front"; // Por defecto: pared frontal
+		let doorSide = "front";
 
 		if (collegeCenter) {
-			// Vector del aula hacia el centro del colegio
 			const toCenter = {
 				x: collegeCenter.x - centerX,
 				y: collegeCenter.y - centerY,
 			};
 
-			// Vectores de las paredes en coordenadas locales (antes de rotar)
 			const walls = {
-				front: { x: 0, y: -1 }, // Pared frontal (hacia -Y)
-				back: { x: 0, y: 1 }, // Pared trasera (hacia +Y)
-				left: { x: -1, y: 0 }, // Pared izquierda (hacia -X)
-				right: { x: 1, y: 0 }, // Pared derecha (hacia +X)
+				front: { x: 0, y: -1 },
+				back: { x: 0, y: 1 },
+				left: { x: -1, y: 0 },
+				right: { x: 1, y: 0 },
 			};
 
-			// Rotar el vector toCenter al espacio local del aula
 			const cos = Math.cos(-angle);
 			const sin = Math.sin(-angle);
 			const localX = toCenter.x * cos - toCenter.y * sin;
 			const localY = toCenter.x * sin + toCenter.y * cos;
 
-			// Normalizar
 			const length = Math.sqrt(localX * localX + localY * localY);
 			const normX = localX / length;
 			const normY = localY / length;
 
-			// Encontrar qué pared está más alineada con el centro
 			let maxDot = -Infinity;
 			let bestSide = "front";
 
@@ -85,31 +183,25 @@ const AulaDetallada = ({
 		return { centerX, centerY, width, depth, angle, doorSide };
 	}, [corners, collegeCenter]);
 
-	// ✅ CALCULAR TECHO A DOS AGUAS (solo último piso)
 	const techoADosAguas = useMemo(() => {
-		if (!isTopFloor) return null;
-
 		const c = corners;
-
-		// Calcular vectores de los lados del aula
 		const v1 = { x: c[1].east - c[0].east, y: c[1].north - c[0].north };
 		const v2 = { x: c[3].east - c[0].east, y: c[3].north - c[0].north };
 
 		const len1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y);
 		const len2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y);
 
-		// Determinar cuál es el lado largo (cumbrera va ahí)
-		const esVertical = len2 > len1;
+		// ✅ PERMITIR OVERRIDE DE ORIENTACIÓN
+		const esVertical = customRoofOrientation
+			? customRoofOrientation === "vertical"
+			: len2 > len1;
 
-		// ✅ VOLADIZO: el techo sobresale
-		const VOLADIZO_NORMAL = 0.6; // 60cm en lados normales
-		const VOLADIZO_CORREDOR = 1.2; // 120cm en lado del corredor
+		const VOLADIZO_NORMAL = 0.6;
+		const VOLADIZO_CORREDOR = 1.2;
 
-		// Normalizar direcciones
 		const dir1 = { x: v1.x / len1, y: v1.y / len1 };
 		const dir2 = { x: v2.x / len2, y: v2.y / len2 };
 
-		// ✅ DETERMINAR VOLADIZOS SEGÚN LADO DEL CORREDOR
 		let voladizo0 = VOLADIZO_NORMAL;
 		let voladizo1 = VOLADIZO_NORMAL;
 		let voladizo2 = VOLADIZO_NORMAL;
@@ -129,7 +221,6 @@ const AulaDetallada = ({
 			voladizo1 = VOLADIZO_CORREDOR;
 		}
 
-		// Puntos extendidos de la base del techo
 		const p0_ext = {
 			east: c[0].east - dir2.x * voladizo0 - dir1.x * voladizo0,
 			north: c[0].north - dir2.y * voladizo0 - dir1.y * voladizo0,
@@ -147,13 +238,11 @@ const AulaDetallada = ({
 			north: c[3].north - dir1.y * voladizo3 + dir2.y * voladizo3,
 		};
 
-		// ✅ CALCULAR CUMBRERA (línea central del techo)
-		const ALTURA_CUMBRERA = 1.5; // 1.5m de altura adicional
+		const ALTURA_CUMBRERA = 1.5;
 
 		let cumbreraStart, cumbreraEnd;
 
 		if (esVertical) {
-			// Cumbrera va de lado 0-3 a lado 1-2 (vertical)
 			const mid1 = {
 				east: (p0_ext.east + p3_ext.east) / 2,
 				north: (p0_ext.north + p3_ext.north) / 2,
@@ -165,7 +254,6 @@ const AulaDetallada = ({
 			cumbreraStart = mid1;
 			cumbreraEnd = mid2;
 		} else {
-			// Cumbrera va de lado 0-1 a lado 3-2 (horizontal)
 			const mid1 = {
 				east: (p0_ext.east + p1_ext.east) / 2,
 				north: (p0_ext.north + p1_ext.north) / 2,
@@ -185,11 +273,54 @@ const AulaDetallada = ({
 			alturaCumbrera: ALTURA_CUMBRERA,
 			esVertical,
 		};
-	}, [corners, isTopFloor, corridorSide]);
+	}, [corners, corridorSide, customRoofOrientation]);
 
 	const wallThickness = 0.15;
 	const doorWidth = 1.0;
 	const doorHeight = 2.1;
+
+	// ✅ Calcular posiciones de ventanas
+	// ✅ Calcular posición de UNA ventana (pared opuesta a la puerta)
+	const windowPosition = useMemo(() => {
+		const windowHeight = 1.5; // Altura del centro de la ventana desde el piso
+
+		// Colocar ventana en la pared OPUESTA a la puerta
+		switch (aulaData.doorSide) {
+			case "front":
+				// Puerta al frente → ventana atrás
+				return {
+					position: [0, aulaData.depth / 2 - 0.08, windowHeight],
+					rotation: [-Math.PI / 2, 0, Math.PI], // Mirando hacia adentro
+				};
+
+			case "back":
+				// Puerta atrás → ventana al frente
+				return {
+					position: [0, -aulaData.depth / 2 + 0.08, windowHeight],
+					rotation: [-Math.PI / 2, 0, 0], // Mirando hacia adentro
+				};
+
+			case "left":
+				// Puerta izquierda → ventana derecha
+				return {
+					position: [aulaData.width / 2 - 0.08, 0, windowHeight],
+					rotation: [-Math.PI / 2, 0, -Math.PI / 2], // Mirando hacia adentro
+				};
+
+			case "right":
+				// Puerta derecha → ventana izquierda
+				return {
+					position: [-aulaData.width / 2 + 0.08, 0, windowHeight],
+					rotation: [-Math.PI / 2, 0, Math.PI / 2], // Mirando hacia adentro
+				};
+
+			default:
+				return {
+					position: [0, aulaData.depth / 2 - 0.08, windowHeight],
+					rotation: [-Math.PI / 2, 0, Math.PI],
+				};
+		}
+	}, [aulaData]);
 
 	return (
 		<group
@@ -209,7 +340,7 @@ const AulaDetallada = ({
 				/>
 			</mesh>
 
-			{/* ✅ PAREDES CON PUERTA DINÁMICA */}
+			{/* ✅ PAREDES CON PUERTA Y VENTANAS */}
 			{/* Pared FRONTAL */}
 			{aulaData.doorSide !== "front" ? (
 				<mesh
@@ -223,55 +354,63 @@ const AulaDetallada = ({
 					<meshStandardMaterial color={color} roughness={0.8} />
 				</mesh>
 			) : (
-				<group position={[0, -aulaData.depth / 2, height / 2]}>
-					<mesh
-						castShadow
-						receiveShadow
-						position={[-aulaData.width / 4 - 0.3, 0, 0]}
-					>
-						<boxGeometry
-							args={[
-								aulaData.width / 2 - 0.6,
-								wallThickness,
-								height,
-							]}
-						/>
-						<meshStandardMaterial color={color} roughness={0.8} />
-					</mesh>
-					<mesh
-						castShadow
-						receiveShadow
-						position={[aulaData.width / 4 + 0.3, 0, 0]}
-					>
-						<boxGeometry
-							args={[
-								aulaData.width / 2 - 0.6,
-								wallThickness,
-								height,
-							]}
-						/>
-						<meshStandardMaterial color={color} roughness={0.8} />
-					</mesh>
-					<mesh
-						castShadow
-						receiveShadow
-						position={[0, 0, height / 2 - 0.45]}
-					>
-						<boxGeometry args={[doorWidth, wallThickness, 0.9]} />
-						<meshStandardMaterial color={color} roughness={0.8} />
-					</mesh>
-					<mesh
-						castShadow
-						position={[
-							0,
-							-wallThickness,
-							-height / 2 + doorHeight / 2,
-						]}
-					>
-						<boxGeometry args={[doorWidth, 0.05, doorHeight]} />
-						<meshStandardMaterial color="#8B6914" roughness={0.6} />
-					</mesh>
-				</group>
+				<>
+					{/* Pared con puerta */}
+					<group position={[0, -aulaData.depth / 2, height / 2]}>
+						<mesh
+							castShadow
+							receiveShadow
+							position={[-aulaData.width / 4 - 0.3, 0, 0]}
+						>
+							<boxGeometry
+								args={[
+									aulaData.width / 2 - 0.6,
+									wallThickness,
+									height,
+								]}
+							/>
+							<meshStandardMaterial
+								color={color}
+								roughness={0.8}
+							/>
+						</mesh>
+						<mesh
+							castShadow
+							receiveShadow
+							position={[aulaData.width / 4 + 0.3, 0, 0]}
+						>
+							<boxGeometry
+								args={[
+									aulaData.width / 2 - 0.6,
+									wallThickness,
+									height,
+								]}
+							/>
+							<meshStandardMaterial
+								color={color}
+								roughness={0.8}
+							/>
+						</mesh>
+						<mesh
+							castShadow
+							receiveShadow
+							position={[0, 0, height / 2 - 0.45]}
+						>
+							<boxGeometry
+								args={[doorWidth, wallThickness, 0.9]}
+							/>
+							<meshStandardMaterial
+								color={color}
+								roughness={0.8}
+							/>
+						</mesh>
+					</group>
+					{/* ✅ PUERTA GLTF */}
+					<DoorWood
+						position={[0.6, -aulaData.depth + 3.5, 0]}
+						rotation={[Math.PI / 2, 0, 0]}
+					/>
+				</>
 			)}
 
 			{/* Pared TRASERA */}
@@ -287,55 +426,62 @@ const AulaDetallada = ({
 					<meshStandardMaterial color={color} roughness={0.8} />
 				</mesh>
 			) : (
-				<group position={[0, aulaData.depth / 2, height / 2]}>
-					<mesh
-						castShadow
-						receiveShadow
-						position={[-aulaData.width / 4 - 0.3, 0, 0]}
-					>
-						<boxGeometry
-							args={[
-								aulaData.width / 2 - 0.6,
-								wallThickness,
-								height,
-							]}
-						/>
-						<meshStandardMaterial color={color} roughness={0.8} />
-					</mesh>
-					<mesh
-						castShadow
-						receiveShadow
-						position={[aulaData.width / 4 + 0.3, 0, 0]}
-					>
-						<boxGeometry
-							args={[
-								aulaData.width / 2 - 0.6,
-								wallThickness,
-								height,
-							]}
-						/>
-						<meshStandardMaterial color={color} roughness={0.8} />
-					</mesh>
-					<mesh
-						castShadow
-						receiveShadow
-						position={[0, 0, height / 2 - 0.45]}
-					>
-						<boxGeometry args={[doorWidth, wallThickness, 0.9]} />
-						<meshStandardMaterial color={color} roughness={0.8} />
-					</mesh>
-					<mesh
-						castShadow
-						position={[
-							0,
-							wallThickness,
-							-height / 2 + doorHeight / 2,
-						]}
-					>
-						<boxGeometry args={[doorWidth, 0.05, doorHeight]} />
-						<meshStandardMaterial color="#8B6914" roughness={0.6} />
-					</mesh>
-				</group>
+				<>
+					<group position={[0, aulaData.depth / 2, height / 2]}>
+						<mesh
+							castShadow
+							receiveShadow
+							position={[-aulaData.width / 4 - 0.3, 0, 0]}
+						>
+							<boxGeometry
+								args={[
+									aulaData.width / 2 - 0.6,
+									wallThickness,
+									height,
+								]}
+							/>
+							<meshStandardMaterial
+								color={color}
+								roughness={0.8}
+							/>
+						</mesh>
+						<mesh
+							castShadow
+							receiveShadow
+							position={[aulaData.width / 4 + 0.3, 0, 0]}
+						>
+							<boxGeometry
+								args={[
+									aulaData.width / 2 - 0.6,
+									wallThickness,
+									height,
+								]}
+							/>
+							<meshStandardMaterial
+								color={color}
+								roughness={0.8}
+							/>
+						</mesh>
+						<mesh
+							castShadow
+							receiveShadow
+							position={[0, 0, height / 2 - 0.45]}
+						>
+							<boxGeometry
+								args={[doorWidth, wallThickness, 0.9]}
+							/>
+							<meshStandardMaterial
+								color={color}
+								roughness={0.8}
+							/>
+						</mesh>
+					</group>
+					{/* ✅ PUERTA GLTF */}
+					<DoorWood
+						position={[0.6, aulaData.depth - 3.5, 0]}
+						rotation={[Math.PI / 2, 0, 0]}
+					/>
+				</>
 			)}
 
 			{/* Pared IZQUIERDA */}
@@ -351,55 +497,62 @@ const AulaDetallada = ({
 					<meshStandardMaterial color={color} roughness={0.8} />
 				</mesh>
 			) : (
-				<group position={[-aulaData.width / 2, 0, height / 2]}>
-					<mesh
-						castShadow
-						receiveShadow
-						position={[0, -aulaData.depth / 4 - 0.3, 0]}
-					>
-						<boxGeometry
-							args={[
-								wallThickness,
-								aulaData.depth / 2 - 0.6,
-								height,
-							]}
-						/>
-						<meshStandardMaterial color={color} roughness={0.8} />
-					</mesh>
-					<mesh
-						castShadow
-						receiveShadow
-						position={[0, aulaData.depth / 4 + 0.3, 0]}
-					>
-						<boxGeometry
-							args={[
-								wallThickness,
-								aulaData.depth / 2 - 0.6,
-								height,
-							]}
-						/>
-						<meshStandardMaterial color={color} roughness={0.8} />
-					</mesh>
-					<mesh
-						castShadow
-						receiveShadow
-						position={[0, 0, height / 2 - 0.45]}
-					>
-						<boxGeometry args={[wallThickness, doorWidth, 0.9]} />
-						<meshStandardMaterial color={color} roughness={0.8} />
-					</mesh>
-					<mesh
-						castShadow
-						position={[
-							-wallThickness,
-							0,
-							-height / 2 + doorHeight / 2,
-						]}
-					>
-						<boxGeometry args={[0.05, doorWidth, doorHeight]} />
-						<meshStandardMaterial color="#8B6914" roughness={0.6} />
-					</mesh>
-				</group>
+				<>
+					<group position={[-aulaData.width / 2, 0, height / 2]}>
+						<mesh
+							castShadow
+							receiveShadow
+							position={[0, -aulaData.depth / 4 - 0.3, 0]}
+						>
+							<boxGeometry
+								args={[
+									wallThickness,
+									aulaData.depth / 2 - 0.6,
+									height,
+								]}
+							/>
+							<meshStandardMaterial
+								color={color}
+								roughness={0.8}
+							/>
+						</mesh>
+						<mesh
+							castShadow
+							receiveShadow
+							position={[0, aulaData.depth / 4 + 0.3, 0]}
+						>
+							<boxGeometry
+								args={[
+									wallThickness,
+									aulaData.depth / 2 - 0.6,
+									height,
+								]}
+							/>
+							<meshStandardMaterial
+								color={color}
+								roughness={0.8}
+							/>
+						</mesh>
+						<mesh
+							castShadow
+							receiveShadow
+							position={[0, 0, height / 2 - 0.45]}
+						>
+							<boxGeometry
+								args={[wallThickness, doorWidth, 0.9]}
+							/>
+							<meshStandardMaterial
+								color={color}
+								roughness={0.8}
+							/>
+						</mesh>
+					</group>
+					{/* ✅ PUERTA GLTF */}
+					<DoorWood
+						position={[-aulaData.width / 2 - 0.1, 0.6, 0]}
+						rotation={[Math.PI / 2, Math.PI / 2, 0]}
+					/>
+				</>
 			)}
 
 			{/* Pared DERECHA */}
@@ -415,57 +568,79 @@ const AulaDetallada = ({
 					<meshStandardMaterial color={color} roughness={0.8} />
 				</mesh>
 			) : (
-				<group position={[aulaData.width / 2, 0, height / 2]}>
-					<mesh
-						castShadow
-						receiveShadow
-						position={[0, -aulaData.depth / 4 - 0.3, 0]}
-					>
-						<boxGeometry
-							args={[
-								wallThickness,
-								aulaData.depth / 2 - 0.6,
-								height,
-							]}
-						/>
-						<meshStandardMaterial color={color} roughness={0.8} />
-					</mesh>
-					<mesh
-						castShadow
-						receiveShadow
-						position={[0, aulaData.depth / 4 + 0.3, 0]}
-					>
-						<boxGeometry
-							args={[
-								wallThickness,
-								aulaData.depth / 2 - 0.6,
-								height,
-							]}
-						/>
-						<meshStandardMaterial color={color} roughness={0.8} />
-					</mesh>
-					<mesh
-						castShadow
-						receiveShadow
-						position={[0, 0, height / 2 - 0.45]}
-					>
-						<boxGeometry args={[wallThickness, doorWidth, 0.9]} />
-						<meshStandardMaterial color={color} roughness={0.8} />
-					</mesh>
-					<mesh
-						castShadow
-						position={[
-							wallThickness,
-							0,
-							-height / 2 + doorHeight / 2,
-						]}
-					>
-						<boxGeometry args={[0.05, doorWidth, doorHeight]} />
-						<meshStandardMaterial color="#8B6914" roughness={0.6} />
-					</mesh>
-				</group>
+				<>
+					<group position={[aulaData.width / 2, 0, height / 2]}>
+						<mesh
+							castShadow
+							receiveShadow
+							position={[0, -aulaData.depth / 4 - 0.3, 0]}
+						>
+							<boxGeometry
+								args={[
+									wallThickness,
+									aulaData.depth / 2 - 0.6,
+									height,
+								]}
+							/>
+							<meshStandardMaterial
+								color={color}
+								roughness={0.8}
+							/>
+						</mesh>
+						<mesh
+							castShadow
+							receiveShadow
+							position={[0, aulaData.depth / 4 + 0.3, 0]}
+						>
+							<boxGeometry
+								args={[
+									wallThickness,
+									aulaData.depth / 2 - 0.6,
+									height,
+								]}
+							/>
+							<meshStandardMaterial
+								color={color}
+								roughness={0.8}
+							/>
+						</mesh>
+						<mesh
+							castShadow
+							receiveShadow
+							position={[0, 0, height / 2 - 0.45]}
+						>
+							<boxGeometry
+								args={[wallThickness, doorWidth, 0.9]}
+							/>
+							<meshStandardMaterial
+								color={color}
+								roughness={0.8}
+							/>
+						</mesh>
+					</group>
+					{/* ✅ PUERTA GLTF */}
+					<DoorWood
+						position={[aulaData.width / 2 + 0.1, 0.6, 0]}
+						rotation={[Math.PI / 2, Math.PI / 2, 0]}
+					/>
+				</>
 			)}
 
+			{/* ✅ VENTANAS */}
+			{/* {windowPosition.map((window, idx) => (
+				<WindowSliding
+					key={`window-${idx}`}
+					position={window.position}
+					//rotation={window.rotation}
+					//position={[0.2, 0, 0]}
+					rotation={[0, Math.PI / 2, 0]}
+				/>
+			))} */}
+			<WindowSliding
+				position={windowPosition.position}
+				rotation={[3.9, Math.PI / 2, 0]}
+				//rotation={windowPosition.rotation}
+			/>
 			{/* COLUMNAS en las esquinas */}
 			{[
 				[-aulaData.width / 2, -aulaData.depth / 2],
@@ -518,7 +693,19 @@ const AulaDetallada = ({
 			</mesh>
 
 			{/* ✅ TECHO PLANO (solo si NO es último piso) */}
-			{!isTopFloor && (
+			{/* {!isTopFloor && (
+				<mesh position={[0, 0, height + 0.1]} castShadow receiveShadow>
+					<boxGeometry
+						args={[
+							aulaData.width + 0.3,
+							aulaData.depth + 0.3,
+							0.15,
+						]}
+					/>
+					<meshStandardMaterial color="#654321" roughness={0.9} />
+				</mesh>
+			)} */}
+			{hasFlatRoof && (
 				<mesh position={[0, 0, height + 0.1]} castShadow receiveShadow>
 					<boxGeometry
 						args={[
@@ -531,35 +718,41 @@ const AulaDetallada = ({
 				</mesh>
 			)}
 
-			{/* ✅ TECHO A DOS AGUAS REALISTA (solo último piso) */}
-
-			{isTopFloor && techoADosAguas && (
-				<group position={[0, 4.5, height]}>
-					{/* ✅ TECHO SÓLIDO - PRISMA TRIANGULAR CON ROTACIÓN CORREGIDA */}
+			{/* ✅ TECHO A DOS AGUAS (solo último piso) */}
+			{/* {isTopFloor && techoADosAguas && ( */}
+			{!hasFlatRoof && techoADosAguas && (
+				<group
+					position={
+						customRoofPosition
+							? customRoofPosition
+							: [0, 4.5, height]
+					}
+				>
 					<mesh
 						castShadow
 						receiveShadow
 						rotation={
-							techoADosAguas.esVertical
-								? [0, 0, Math.PI / 2] // ✅ CAMBIO: invertir
-								: [Math.PI / 2, 0, 0] // se hizo el cambio aqui
+							customRoofRotation
+								? customRoofRotation
+								: techoADosAguas.esVertical
+								? [0, 0, Math.PI / 2]
+								: [Math.PI / 2, 0, 0]
 						}
 					>
 						<extrudeGeometry
 							args={[
 								(() => {
-									// ✅ Crear perfil triangular del techo
 									const shape = new THREE.Shape();
 
-									// ✅ CAMBIO: usar el lado CORTO para el ancho del triángulo
-									const baseWidth = techoADosAguas.esVertical
-										? aulaData.width + 1.2 // ✅ CAMBIO: invertir
+									const baseWidth = customRoofWidth
+										? customRoofWidth
+										: techoADosAguas.esVertical
+										? aulaData.width + 1.2
 										: aulaData.depth + 1.2;
 
 									const altura =
 										techoADosAguas.alturaCumbrera;
 
-									// Triángulo: base -> pico -> base
 									shape.moveTo(-baseWidth / 2, 0);
 									shape.lineTo(0, altura);
 									shape.lineTo(baseWidth / 2, 0);
@@ -568,9 +761,10 @@ const AulaDetallada = ({
 									return shape;
 								})(),
 								{
-									// ✅ CAMBIO: extruir a lo largo del lado LARGO
-									depth: techoADosAguas.esVertical
-										? aulaData.depth + 1.2 // ✅ CAMBIO: invertir
+									depth: customRoofDepth
+										? customRoofDepth
+										: techoADosAguas.esVertical
+										? aulaData.depth + 1.2
 										: aulaData.width + 1.2,
 									bevelEnabled: false,
 								},
@@ -582,129 +776,70 @@ const AulaDetallada = ({
 							metalness={0.15}
 						/>
 					</mesh>
-
-					{/* ✅ TEXTURA DE TEJAS - Líneas horizontales CORREGIDAS */}
-					{/* {Array.from({ length: 10 }, (_, i) => {
-						const alturaLinea =
-							(i + 1) * (techoADosAguas.alturaCumbrera / 10);
-
-						return (
-							<mesh
-								key={`teja-${i}`}
-								rotation={
-									techoADosAguas.esVertical
-										? [0, 0, Math.PI / 2] // ✅ CAMBIO: invertir
-										: [0, 0, 0]
-								}
-								position={[0, 0, alturaLinea]}
-								castShadow
-							>
-								<boxGeometry
-									args={[
-										0.03,
-										techoADosAguas.esVertical
-											? aulaData.depth + 1.3 // ✅ CAMBIO: invertir
-											: aulaData.width + 1.3,
-										0.02,
-									]}
-								/>
-								<meshStandardMaterial
-									color="#A0522D"
-									roughness={0.9}
-								/>
-							</mesh>
-						);
-					})} */}
-
-					{/* ✅ CUMBRERA (remate superior) CORREGIDA */}
-					{/* <mesh
-						position={[0, 0, techoADosAguas.alturaCumbrera]}
-						rotation={
-							techoADosAguas.esVertical
-								? [0, 0, Math.PI / 2] // ✅ CAMBIO: invertir
-								: [0, 0, 0]
-						}
-						castShadow
-					>
-						<boxGeometry
-							args={[
-								0.2,
-								techoADosAguas.esVertical
-									? aulaData.depth + 1.4 // ✅ CAMBIO: invertir
-									: aulaData.width + 1.4,
-								0.15,
-							]}
-						/>
-						<meshStandardMaterial color="#654321" roughness={0.8} />
-					</mesh> */}
-
-					{/* ✅ ALEROS (bordes inferiores del techo) CORREGIDOS */}
-					{/* Alero derecho */}
-					{/* <mesh
-						position={
-							techoADosAguas.esVertical
-								? [
-										(aulaData.width + 1.2) / 2, // ✅ CAMBIO: invertir
-										0,
-										0.05,
-								  ]
-								: [0, (aulaData.depth + 1.2) / 2, 0.05]
-						}
-						rotation={
-							techoADosAguas.esVertical
-								? [0, 0, Math.PI / 2] // ✅ CAMBIO: invertir
-								: [0, 0, 0]
-						}
-					>
-						<boxGeometry
-							args={[
-								0.15,
-								techoADosAguas.esVertical
-									? aulaData.depth + 1.4 // ✅ CAMBIO: invertir
-									: aulaData.width + 1.4,
-								0.1,
-							]}
-						/>
-						<meshStandardMaterial
-							color="#654321"
-							roughness={0.85}
-						/>
-					</mesh> */}
-
-					{/* Alero izquierdo */}
-					{/* <mesh
-						position={
-							techoADosAguas.esVertical
-								? [
-										-(aulaData.width + 1.2) / 2, // ✅ CAMBIO: invertir
-										0,
-										0.05,
-								  ]
-								: [0, -(aulaData.depth + 1.2) / 2, 0.05]
-						}
-						rotation={
-							techoADosAguas.esVertical
-								? [0, 0, Math.PI / 2] // ✅ CAMBIO: invertir
-								: [0, 0, 0]
-						}
-					>
-						<boxGeometry
-							args={[
-								0.15,
-								techoADosAguas.esVertical
-									? aulaData.depth + 1.4 // ✅ CAMBIO: invertir
-									: aulaData.width + 1.4,
-								0.1,
-							]}
-						/>
-						<meshStandardMaterial
-							color="#654321"
-							roughness={0.85}
-						/>
-					</mesh> */}
 				</group>
 			)}
 
+			{/* )} */}
+			{/* {techoADosAguas && (
+				<group
+					position={
+						customRoofPosition
+							? customRoofPosition
+							: [0, 4.5, height]
+					}
+				>
+					<mesh
+						castShadow
+						receiveShadow
+						rotation={
+							customRoofRotation
+								? customRoofRotation
+								: techoADosAguas.esVertical
+								? [0, 0, Math.PI / 2]
+								: [Math.PI / 2, 0, 0]
+						}
+					>
+						<extrudeGeometry
+							args={[
+								(() => {
+									const shape = new THREE.Shape();
+
+									// ✅ USAR DIMENSIONES CUSTOM SI ESTÁN DISPONIBLES
+									const baseWidth = customRoofWidth
+										? customRoofWidth
+										: techoADosAguas.esVertical
+										? aulaData.width + 1.2
+										: aulaData.depth + 1.2;
+
+									const altura =
+										techoADosAguas.alturaCumbrera;
+
+									shape.moveTo(-baseWidth / 2, 0);
+									shape.lineTo(0, altura);
+									shape.lineTo(baseWidth / 2, 0);
+									shape.lineTo(-baseWidth / 2, 0);
+
+									return shape;
+								})(),
+								{
+									// ✅ USAR PROFUNDIDAD CUSTOM SI ESTÁ DISPONIBLE
+									depth: customRoofDepth
+										? customRoofDepth
+										: techoADosAguas.esVertical
+										? aulaData.depth + 1.2
+										: aulaData.width + 1.2,
+									bevelEnabled: false,
+								},
+							]}
+						/>
+						<meshStandardMaterial
+							color="#8B4513"
+							roughness={0.85}
+							metalness={0.15}
+						/>
+					</mesh>
+				</group>
+			)} */}
 			{/* TEXTO */}
 			<Text
 				position={[0, 0, height + (isTopFloor ? 2.2 : 0.6)]}

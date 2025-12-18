@@ -4,6 +4,7 @@ const AreaVertices = (vertices) => {
 	}
 
 	console.log("vertices data", typeof vertices);
+	console.log("vertices", vertices);
 	const closedVertices =
 		vertices[0][0] === vertices[vertices.length - 1][0] &&
 		vertices[0][1] === vertices[vertices.length - 1][1]

@@ -13,18 +13,13 @@ const MaxRectangle = (coordinate) => {
 
 	return new Promise((resolve) => {
 		setTimeout(() => {
-			console.log(
-				"🔍 Buscando rectángulos en",
-				coordinates.length,
-				"puntos"
-			);
 			const allRectangles = [];
 
 			// Buscar rectángulos en diferentes ángulos
 			for (let degrees = 0; degrees < 180; degrees += 5) {
 				const angle = (degrees * Math.PI) / 180;
 				const rect = findMaxRectangleAtAngle(coordinates, angle);
-				//	console.log("rect:::", rect);
+
 				if (rect) {
 					allRectangles.push(rect);
 				}
@@ -129,6 +124,7 @@ const MaxRectangle = (coordinate) => {
 				ancho: rectangulo.width,
 				alto: rectangulo.height,
 				area: rectangulo.area,
+				perimetro: rectangulo.perimeter,
 				centro: {
 					east:
 						(rectangulo.corners[0].east +
@@ -222,11 +218,17 @@ const findMaxRectangleAtAngle = (polygon, angle) => {
 		{ east: bestRect.x2, north: bestRect.y2 },
 		{ east: bestRect.x1, north: bestRect.y2 },
 	].map((p) => rotatePoint(p, angle, center));
+
+	const width = Math.abs(bestRect.x2 - bestRect.x1);
+	const height = Math.abs(bestRect.y2 - bestRect.y1);
+	const perimeter = 2 * (width + height); // ✅ Cálculo del perímetro
+
 	return {
 		corners: rectCorners,
 		area: maxArea,
-		width: Math.abs(bestRect.x2 - bestRect.x1),
-		height: Math.abs(bestRect.y2 - bestRect.y1),
+		width: width,
+		height: height,
+		perimeter: perimeter,
 		angle: (angle * 180) / Math.PI,
 	};
 };

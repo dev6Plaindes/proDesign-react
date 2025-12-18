@@ -1,6 +1,7 @@
 // SceneX.jsx
 import { useSelector } from "react-redux";
-import { Canvas, useThree } from "@react-three/fiber";
+import { Canvas, useLoader, useThree } from "@react-three/fiber";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import {
 	OrbitControls,
 	PerspectiveCamera,
@@ -49,8 +50,10 @@ import {
 } from "../../../utils/directGeometryExporter";
 import Corredor3D from "./components/Components3d/Corredor3D";
 import CercoPerimetrico from "./components/Components3d/PerimeterFence";
+import Vereda3D from "./components/Components3d/Vereda3d";
+import EntradaGate from "./components/Components3d/EntradaGate";
 
-const View3D = ({ school, view, space, spaceEntrance }) => {
+const View3D = ({ school }) => {
 	// ✅ LEER DATOS DE REDUX
 	const {
 		elementos,
@@ -69,7 +72,7 @@ const View3D = ({ school, view, space, spaceEntrance }) => {
 	// Ejemplo de primeras 2 aulas primaria para ver si coords son diferentes:
 	if (elementos.primaria?.length >= 2) {
 		console.log(
-			"Primera aula primaria coords:",
+			"Primera aula primaria coords<xz<x:",
 			elementos.primaria[0].realCorners
 		);
 		console.log(
@@ -91,11 +94,8 @@ const View3D = ({ school, view, space, spaceEntrance }) => {
 
 	// const completarElementosConDistribution = useMemo(() => {
 	// 	if (!distribution?.floors || !elementos || totalFloors <= 1) {
-	// 		return elementos; // Sin cambios si es un solo piso
+	// 		return elementos;
 	// 	}
-
-	// 	console.log("🔧 Completando elementos con distribution.floors...");
-
 	// 	// Clonar elementos existentes
 	// 	const elementosCompletos = {
 	// 		inicial: [...(elementos.inicial || [])],
@@ -109,71 +109,147 @@ const View3D = ({ school, view, space, spaceEntrance }) => {
 	// 		cancha: elementos.cancha,
 	// 	};
 
+	// 	// ✅ CREAR "PLANTILLAS" PARA AULAS EXTRA
+	// 	// Las plantillas incluyen: aulas del piso 1 + espacios de baños (que se pueden usar en piso 2+)
+	// 	const crearPlantillas = (aulasBase, banosBase, nivel) => {
+	// 		// ✅ INSERTAR baño después de la primera aula (donde realmente está)
+	// 		const plantillas = [];
+
+	// 		if (aulasBase.length > 0) {
+	// 			// Primera aula
+	// 			plantillas.push(aulasBase[0]);
+
+	// 			// ✅ BUSCAR Y AGREGAR BAÑO DE ESTE NIVEL (va después de la primera aula)
+	// 			if (banosBase && banosBase.length > 0) {
+	// 				const banoDeEstePabellon = banosBase.find(
+	// 					(bano) =>
+	// 						bano.nivel === nivel ||
+	// 						(nivel === "Inicial" && bano.nivel === "Inicial") ||
+	// 						(nivel === "Primaria" &&
+	// 							bano.nivel === "Primaria") ||
+	// 						(nivel === "Secundaria" &&
+	// 							bano.nivel === "Secundaria")
+	// 				);
+
+	// 				if (banoDeEstePabellon) {
+	// 					console.log(
+	// 						`  📦 Insertando baño ${banoDeEstePabellon.nivel} en posición 1 para ${nivel}`
+	// 					);
+	// 					plantillas.push({
+	// 						...banoDeEstePabellon,
+	// 						realCorners: banoDeEstePabellon.realCorners,
+	// 						_fromBano: true,
+	// 						_banoNivel: banoDeEstePabellon.nivel,
+	// 					});
+	// 				}
+	// 			}
+
+	// 			// Resto de aulas (desde índice 1 en adelante)
+	// 			for (let i = 1; i < aulasBase.length; i++) {
+	// 				plantillas.push(aulasBase[i]);
+	// 			}
+	// 		}
+
+	// 		console.log(
+	// 			`    Orden de plantillas para ${nivel}:`,
+	// 			plantillas
+	// 				.map((p, i) => `${i}: ${p._fromBano ? "Baño" : "Aula"}`)
+	// 				.join(", ")
+	// 		);
+
+	// 		return plantillas;
+	// 	};
+
 	// 	// ✅ COMPLETAR INICIAL
+	// 	const inicialPiso1Count = distribution.floors[1]?.inicial || 0;
 	// 	let totalInicialNecesarias = 0;
 	// 	for (let floor = 1; floor <= totalFloors; floor++) {
-	// 		const count = distribution.floors[floor]?.inicial || 0;
-	// 		totalInicialNecesarias += count;
-	// 		console.log(`  Piso ${floor}: necesita ${count} aulas inicial`);
+	// 		totalInicialNecesarias += distribution.floors[floor]?.inicial || 0;
 	// 	}
-
-	// 	console.log(
-	// 		`📊 Inicial - Necesarias: ${totalInicialNecesarias}, Existentes: ${elementosCompletos.inicial.length}`
-	// 	);
 
 	// 	const inicialFaltantes =
 	// 		totalInicialNecesarias - elementosCompletos.inicial.length;
 	// 	if (inicialFaltantes > 0 && elementosCompletos.inicial.length > 0) {
-	// 		console.log(`  ✅ Generando ${inicialFaltantes} aulas inicial`);
-	// 		const baseAula = elementosCompletos.inicial[0];
+	// 		console.log(
+	// 			`  ✅ Generando ${inicialFaltantes} aulas inicial para piso 2+`
+	// 		);
+
+	// 		const plantillas = crearPlantillas(
+	// 			elementosCompletos.inicial.slice(0, inicialPiso1Count),
+	// 			elementosCompletos.banos,
+	// 			"Inicial"
+	// 		);
 
 	// 		for (let i = 0; i < inicialFaltantes; i++) {
+	// 			const baseIndex = i % plantillas.length;
+	// 			const baseAula = plantillas[baseIndex];
+
+	// 			console.log(
+	// 				`    Aula inicial ${i} → plantilla ${baseIndex}${
+	// 					baseAula._fromBano ? " (ex-baño)" : ""
+	// 				}`
+	// 			);
+
 	// 			elementosCompletos.inicial.push({
 	// 				...baseAula,
 	// 				realCorners: baseAula.realCorners.map((c) => ({ ...c })),
 	// 				_generated: true,
+	// 				_baseIndex: baseIndex,
+	// 				_fromBano: baseAula._fromBano,
 	// 			});
 	// 		}
 	// 	}
 
 	// 	// ✅ COMPLETAR PRIMARIA
+	// 	const primariaPiso1Count = distribution.floors[1]?.primaria || 0;
 	// 	let totalPrimariaNecesarias = 0;
 	// 	for (let floor = 1; floor <= totalFloors; floor++) {
-	// 		const count = distribution.floors[floor]?.primaria || 0;
-	// 		totalPrimariaNecesarias += count;
-	// 		console.log(`  Piso ${floor}: necesita ${count} aulas primaria`);
+	// 		totalPrimariaNecesarias +=
+	// 			distribution.floors[floor]?.primaria || 0;
 	// 	}
-
-	// 	console.log(
-	// 		`📊 Primaria - Necesarias: ${totalPrimariaNecesarias}, Existentes: ${elementosCompletos.primaria.length}`
-	// 	);
 
 	// 	const primariaFaltantes =
 	// 		totalPrimariaNecesarias - elementosCompletos.primaria.length;
 	// 	if (primariaFaltantes > 0 && elementosCompletos.primaria.length > 0) {
-	// 		console.log(`  ✅ Generando ${primariaFaltantes} aulas primaria`);
-	// 		const baseAula = elementosCompletos.primaria[0];
+	// 		console.log(
+	// 			`  ✅ Generando ${primariaFaltantes} aulas primaria para piso 2+`
+	// 		);
+
+	// 		const plantillas = crearPlantillas(
+	// 			elementosCompletos.primaria.slice(0, primariaPiso1Count),
+	// 			elementosCompletos.banos,
+	// 			"Primaria"
+	// 		);
+
+	// 		console.log(`    Plantillas primaria: ${plantillas.length} total`);
 
 	// 		for (let i = 0; i < primariaFaltantes; i++) {
+	// 			const baseIndex = i % plantillas.length;
+	// 			const baseAula = plantillas[baseIndex];
+
+	// 			console.log(
+	// 				`    Aula primaria ${i} → plantilla ${baseIndex}${
+	// 					baseAula._fromBano ? " (🚽 ex-baño)" : " (🏫 aula)"
+	// 				}`
+	// 			);
+
 	// 			elementosCompletos.primaria.push({
 	// 				...baseAula,
 	// 				realCorners: baseAula.realCorners.map((c) => ({ ...c })),
 	// 				_generated: true,
+	// 				_baseIndex: baseIndex,
+	// 				_fromBano: baseAula._fromBano,
 	// 			});
 	// 		}
 	// 	}
 
-	// 	// ✅ COMPLETAR SECUNDARIA
+	// 	// ✅ COMPLETAR SECUNDARIA (igual)
+	// 	const secundariaPiso1Count = distribution.floors[1]?.secundaria || 0;
 	// 	let totalSecundariaNecesarias = 0;
 	// 	for (let floor = 1; floor <= totalFloors; floor++) {
-	// 		const count = distribution.floors[floor]?.secundaria || 0;
-	// 		totalSecundariaNecesarias += count;
-	// 		console.log(`  Piso ${floor}: necesita ${count} aulas secundaria`);
+	// 		totalSecundariaNecesarias +=
+	// 			distribution.floors[floor]?.secundaria || 0;
 	// 	}
-
-	// 	console.log(
-	// 		`📊 Secundaria - Necesarias: ${totalSecundariaNecesarias}, Existentes: ${elementosCompletos.secundaria.length}`
-	// 	);
 
 	// 	const secundariaFaltantes =
 	// 		totalSecundariaNecesarias - elementosCompletos.secundaria.length;
@@ -182,37 +258,38 @@ const View3D = ({ school, view, space, spaceEntrance }) => {
 	// 		elementosCompletos.secundaria.length > 0
 	// 	) {
 	// 		console.log(
-	// 			`  ✅ Generando ${secundariaFaltantes} aulas secundaria`
+	// 			`  ✅ Generando ${secundariaFaltantes} aulas secundaria para piso 2+`
 	// 		);
-	// 		const baseAula = elementosCompletos.secundaria[0];
+
+	// 		const plantillas = crearPlantillas(
+	// 			elementosCompletos.secundaria.slice(0, secundariaPiso1Count),
+	// 			elementosCompletos.banos,
+	// 			"Secundaria"
+	// 		);
+
+	// 		console.log(
+	// 			`    Plantillas secundaria: ${plantillas.length} total`
+	// 		);
 
 	// 		for (let i = 0; i < secundariaFaltantes; i++) {
+	// 			const baseIndex = i % plantillas.length;
+	// 			const baseAula = plantillas[baseIndex];
+
+	// 			console.log(
+	// 				`    Aula secundaria ${i} → plantilla ${baseIndex}${
+	// 					baseAula._fromBano ? " (🚽 ex-baño)" : " (🏫 aula)"
+	// 				}`
+	// 			);
+
 	// 			elementosCompletos.secundaria.push({
 	// 				...baseAula,
 	// 				realCorners: baseAula.realCorners.map((c) => ({ ...c })),
 	// 				_generated: true,
+	// 				_baseIndex: baseIndex,
+	// 				_fromBano: baseAula._fromBano,
 	// 			});
 	// 		}
 	// 	}
-	// 	console.log("🔍 DEBUG - Necesidades por piso:", {
-	// 		piso1: {
-	// 			inicial: distribution.floors[1]?.inicial || 0,
-	// 			primaria: distribution.floors[1]?.primaria || 0,
-	// 			secundaria: distribution.floors[1]?.secundaria || 0,
-	// 		},
-	// 		piso2: {
-	// 			inicial: distribution.floors[2]?.inicial || 0,
-	// 			primaria: distribution.floors[2]?.primaria || 0,
-	// 			secundaria: distribution.floors[2]?.secundaria || 0,
-	// 		},
-	// 	});
-
-	// 	console.log("🔍 DEBUG - Elementos originales:", {
-	// 		inicial: elementos.inicial?.length || 0,
-	// 		primaria: elementos.primaria?.length || 0,
-	// 		secundaria: elementos.secundaria?.length || 0,
-	// 		banos: elementos.banos?.length || 0,
-	// 	});
 
 	// 	console.log("✅ Elementos FINALES después de completar:", {
 	// 		inicial: elementosCompletos.inicial.length,
@@ -223,10 +300,16 @@ const View3D = ({ school, view, space, spaceEntrance }) => {
 
 	// 	return elementosCompletos;
 	// }, [elementos, distribution, totalFloors]);
+
+	// Toggle visibilidad de un piso
 	const completarElementosConDistribution = useMemo(() => {
-		if (!distribution?.floors || !elementos || totalFloors <= 1) {
-			return elementos;
-		}
+		// if (!distribution?.floors || !elementos || totalFloors <= 1) {
+		// 	return elementos;
+		// }
+
+		console.log("🔧 Completando elementos con distribution.floors...");
+		console.log("📊 Distribution completo:", distribution);
+
 		// Clonar elementos existentes
 		const elementosCompletos = {
 			inicial: [...(elementos.inicial || [])],
@@ -240,86 +323,70 @@ const View3D = ({ school, view, space, spaceEntrance }) => {
 			cancha: elementos.cancha,
 		};
 
-		// ✅ CREAR "PLANTILLAS" PARA AULAS EXTRA
-		// Las plantillas incluyen: aulas del piso 1 + espacios de baños (que se pueden usar en piso 2+)
-		const crearPlantillas = (aulasBase, banosBase, nivel) => {
-			// ✅ INSERTAR baño después de la primera aula (donde realmente está)
+		// ✅ FUNCIÓN MEJORADA PARA CREAR PLANTILLAS
+		const crearPlantillas = (aulasBase, nivel) => {
+			if (aulasBase.length === 0) return [];
+
 			const plantillas = [];
 
-			if (aulasBase.length > 0) {
-				// Primera aula
-				plantillas.push(aulasBase[0]);
+			// ✅ La primera aula siempre va
+			plantillas.push(aulasBase[0]);
 
-				// ✅ BUSCAR Y AGREGAR BAÑO DE ESTE NIVEL (va después de la primera aula)
-				if (banosBase && banosBase.length > 0) {
-					const banoDeEstePabellon = banosBase.find(
-						(bano) =>
-							bano.nivel === nivel ||
-							(nivel === "Inicial" && bano.nivel === "Inicial") ||
-							(nivel === "Primaria" &&
-								bano.nivel === "Primaria") ||
-							(nivel === "Secundaria" &&
-								bano.nivel === "Secundaria")
-					);
+			// ✅ Buscar el baño de este nivel (si existe)
+			const banoDeEstePabellon = elementosCompletos.banos.find((bano) => {
+				const banoNivel = bano.nivel?.toLowerCase() || "";
+				const targetNivel = nivel.toLowerCase();
+				return banoNivel.includes(targetNivel);
+			});
 
-					if (banoDeEstePabellon) {
-						console.log(
-							`  📦 Insertando baño ${banoDeEstePabellon.nivel} en posición 1 para ${nivel}`
-						);
-						plantillas.push({
-							...banoDeEstePabellon,
-							realCorners: banoDeEstePabellon.realCorners,
-							_fromBano: true,
-							_banoNivel: banoDeEstePabellon.nivel,
-						});
-					}
-				}
-
-				// Resto de aulas (desde índice 1 en adelante)
-				for (let i = 1; i < aulasBase.length; i++) {
-					plantillas.push(aulasBase[i]);
-				}
+			if (banoDeEstePabellon) {
+				console.log(`  📦 Encontrado baño para ${nivel}`);
+				plantillas.push({
+					...banoDeEstePabellon,
+					_fromBano: true,
+					_banoNivel: banoDeEstePabellon.nivel,
+				});
 			}
 
-			console.log(
-				`    Orden de plantillas para ${nivel}:`,
-				plantillas
-					.map((p, i) => `${i}: ${p._fromBano ? "Baño" : "Aula"}`)
-					.join(", ")
-			);
+			// ✅ Resto de aulas (desde índice 1 en adelante)
+			for (let i = 1; i < aulasBase.length; i++) {
+				plantillas.push(aulasBase[i]);
+			}
+
+			console.log(`  ✅ Plantillas para ${nivel}:`, {
+				total: plantillas.length,
+				conBaño: !!banoDeEstePabellon,
+				aulas: aulasBase.length,
+			});
 
 			return plantillas;
 		};
 
 		// ✅ COMPLETAR INICIAL
-		const inicialPiso1Count = distribution.floors[1]?.inicial || 0;
 		let totalInicialNecesarias = 0;
 		for (let floor = 1; floor <= totalFloors; floor++) {
 			totalInicialNecesarias += distribution.floors[floor]?.inicial || 0;
 		}
 
+		console.log(
+			`📊 Inicial - Total necesarias: ${totalInicialNecesarias}, Existentes: ${elementosCompletos.inicial.length}`
+		);
+
 		const inicialFaltantes =
 			totalInicialNecesarias - elementosCompletos.inicial.length;
 		if (inicialFaltantes > 0 && elementosCompletos.inicial.length > 0) {
 			console.log(
-				`  ✅ Generando ${inicialFaltantes} aulas inicial para piso 2+`
+				`  ✅ Generando ${inicialFaltantes} aulas inicial adicionales`
 			);
 
 			const plantillas = crearPlantillas(
-				elementosCompletos.inicial.slice(0, inicialPiso1Count),
-				elementosCompletos.banos,
+				elementosCompletos.inicial,
 				"Inicial"
 			);
 
 			for (let i = 0; i < inicialFaltantes; i++) {
 				const baseIndex = i % plantillas.length;
 				const baseAula = plantillas[baseIndex];
-
-				console.log(
-					`    Aula inicial ${i} → plantilla ${baseIndex}${
-						baseAula._fromBano ? " (ex-baño)" : ""
-					}`
-				);
 
 				elementosCompletos.inicial.push({
 					...baseAula,
@@ -332,35 +399,45 @@ const View3D = ({ school, view, space, spaceEntrance }) => {
 		}
 
 		// ✅ COMPLETAR PRIMARIA
-		const primariaPiso1Count = distribution.floors[1]?.primaria || 0;
 		let totalPrimariaNecesarias = 0;
 		for (let floor = 1; floor <= totalFloors; floor++) {
 			totalPrimariaNecesarias +=
 				distribution.floors[floor]?.primaria || 0;
 		}
 
+		console.log(
+			`📊 Primaria - Total necesarias: ${totalPrimariaNecesarias}, Existentes: ${elementosCompletos.primaria.length}`
+		);
+		console.log(`   Detalle por piso:`, {
+			piso1: distribution.floors[1]?.primaria || 0,
+			piso2: distribution.floors[2]?.primaria || 0,
+		});
+
 		const primariaFaltantes =
 			totalPrimariaNecesarias - elementosCompletos.primaria.length;
 		if (primariaFaltantes > 0 && elementosCompletos.primaria.length > 0) {
 			console.log(
-				`  ✅ Generando ${primariaFaltantes} aulas primaria para piso 2+`
+				`  ✅ Generando ${primariaFaltantes} aulas primaria adicionales`
 			);
 
 			const plantillas = crearPlantillas(
-				elementosCompletos.primaria.slice(0, primariaPiso1Count),
-				elementosCompletos.banos,
+				elementosCompletos.primaria,
 				"Primaria"
 			);
 
-			console.log(`    Plantillas primaria: ${plantillas.length} total`);
+			console.log(
+				`    Usando ${plantillas.length} plantillas para primaria`
+			);
 
 			for (let i = 0; i < primariaFaltantes; i++) {
 				const baseIndex = i % plantillas.length;
 				const baseAula = plantillas[baseIndex];
 
 				console.log(
-					`    Aula primaria ${i} → plantilla ${baseIndex}${
-						baseAula._fromBano ? " (🚽 ex-baño)" : " (🏫 aula)"
+					`    Generando aula ${
+						i + 1
+					}/${primariaFaltantes} usando plantilla ${baseIndex} ${
+						baseAula._fromBano ? "(ex-baño)" : "(aula)"
 					}`
 				);
 
@@ -374,13 +451,20 @@ const View3D = ({ school, view, space, spaceEntrance }) => {
 			}
 		}
 
-		// ✅ COMPLETAR SECUNDARIA (igual)
-		const secundariaPiso1Count = distribution.floors[1]?.secundaria || 0;
+		// ✅ COMPLETAR SECUNDARIA
 		let totalSecundariaNecesarias = 0;
 		for (let floor = 1; floor <= totalFloors; floor++) {
 			totalSecundariaNecesarias +=
 				distribution.floors[floor]?.secundaria || 0;
 		}
+
+		console.log(
+			`📊 Secundaria - Total necesarias: ${totalSecundariaNecesarias}, Existentes: ${elementosCompletos.secundaria.length}`
+		);
+		console.log(`   Detalle por piso:`, {
+			piso1: distribution.floors[1]?.secundaria || 0,
+			piso2: distribution.floors[2]?.secundaria || 0,
+		});
 
 		const secundariaFaltantes =
 			totalSecundariaNecesarias - elementosCompletos.secundaria.length;
@@ -389,17 +473,16 @@ const View3D = ({ school, view, space, spaceEntrance }) => {
 			elementosCompletos.secundaria.length > 0
 		) {
 			console.log(
-				`  ✅ Generando ${secundariaFaltantes} aulas secundaria para piso 2+`
+				`  ✅ Generando ${secundariaFaltantes} aulas secundaria adicionales`
 			);
 
 			const plantillas = crearPlantillas(
-				elementosCompletos.secundaria.slice(0, secundariaPiso1Count),
-				elementosCompletos.banos,
+				elementosCompletos.secundaria,
 				"Secundaria"
 			);
 
 			console.log(
-				`    Plantillas secundaria: ${plantillas.length} total`
+				`    Usando ${plantillas.length} plantillas para secundaria`
 			);
 
 			for (let i = 0; i < secundariaFaltantes; i++) {
@@ -407,8 +490,10 @@ const View3D = ({ school, view, space, spaceEntrance }) => {
 				const baseAula = plantillas[baseIndex];
 
 				console.log(
-					`    Aula secundaria ${i} → plantilla ${baseIndex}${
-						baseAula._fromBano ? " (🚽 ex-baño)" : " (🏫 aula)"
+					`    Generando aula ${
+						i + 1
+					}/${secundariaFaltantes} usando plantilla ${baseIndex} ${
+						baseAula._fromBano ? "(ex-baño)" : "(aula)"
 					}`
 				);
 
@@ -422,7 +507,7 @@ const View3D = ({ school, view, space, spaceEntrance }) => {
 			}
 		}
 
-		console.log("✅ Elementos FINALES después de completar:", {
+		console.log("✅ Elementos FINALES después de completarssasasa:", {
 			inicial: elementosCompletos.inicial.length,
 			primaria: elementosCompletos.primaria.length,
 			secundaria: elementosCompletos.secundaria.length,
@@ -432,7 +517,6 @@ const View3D = ({ school, view, space, spaceEntrance }) => {
 		return elementosCompletos;
 	}, [elementos, distribution, totalFloors]);
 
-	// Toggle visibilidad de un piso
 	const toggleFloor = (floor) => {
 		setVisibleFloors((prev) => {
 			if (prev.includes(floor)) {
@@ -455,121 +539,6 @@ const View3D = ({ school, view, space, spaceEntrance }) => {
 		setVisibleFloors([floor]);
 	};
 
-	// ✅ NORMALIZAR COORDENADAS - Restar el mínimo
-	// const normalizedData = useMemo(() => {
-	// 	if (
-	// 		!isReady ||
-	// 		!elementos ||
-	// 		!coordinates ||
-	// 		coordinates.length === 0
-	// 	) {
-	// 		return null;
-	// 	}
-
-	// 	// Encontrar valores mínimos
-	// 	const allEasts = [];
-	// 	const allNorths = [];
-
-	// 	// Recolectar todas las coordenadas
-	// 	coordinates.forEach((c) => {
-	// 		allEasts.push(c.east);
-	// 		allNorths.push(c.north);
-	// 	});
-
-	// 	// Recolectar de elementos
-	// 	const collectFromElements = (items) => {
-	// 		if (!items) return;
-	// 		items.forEach((item) => {
-	// 			if (item.realCorners) {
-	// 				item.realCorners.forEach((c) => {
-	// 					allEasts.push(c.east);
-	// 					allNorths.push(c.north);
-	// 				});
-	// 			}
-	// 		});
-	// 	};
-
-	// 	collectFromElements(elementos.inicial);
-	// 	collectFromElements(elementos.primaria);
-	// 	collectFromElements(elementos.secundaria);
-	// 	collectFromElements(elementos.banos);
-	// 	collectFromElements(elementos.escaleras);
-	// 	collectFromElements(elementos.ambientes);
-	// 	collectFromElements(elementos.laterales);
-
-	// 	if (elementos.entrada?.realCorners) {
-	// 		collectFromElements([elementos.entrada]);
-	// 	}
-
-	// 	if (elementos.cancha?.realCorners) {
-	// 		collectFromElements([elementos.cancha]);
-	// 	}
-
-	// 	const minEast = Math.min(...allEasts);
-	// 	const minNorth = Math.min(...allNorths);
-
-	// 	console.log("📍 Normalización:", { minEast, minNorth });
-
-	// 	// Función para normalizar corners
-	// 	const normalizeCorners = (corners) => {
-	// 		if (!corners) return corners;
-	// 		return corners.map((c) => ({
-	// 			east: c.east - minEast,
-	// 			north: c.north - minNorth,
-	// 		}));
-	// 	};
-
-	// 	// Función para normalizar un array de items
-	// 	const normalizeItems = (items) => {
-	// 		if (!items) return items;
-	// 		return items.map((item) => ({
-	// 			...item,
-	// 			realCorners: normalizeCorners(item.realCorners),
-	// 		}));
-	// 	};
-
-	// 	// Normalizar todos los elementos
-	// 	const normalizedElementos = {
-	// 		inicial: normalizeItems(elementos.inicial),
-	// 		primaria: normalizeItems(elementos.primaria),
-	// 		secundaria: normalizeItems(elementos.secundaria),
-	// 		banos: normalizeItems(elementos.banos),
-	// 		escaleras: normalizeItems(elementos.escaleras),
-	// 		ambientes: normalizeItems(elementos.ambientes),
-	// 		laterales: normalizeItems(elementos.laterales),
-	// 		entrada: elementos.entrada
-	// 			? {
-	// 					...elementos.entrada,
-	// 					realCorners: normalizeCorners(
-	// 						elementos.entrada.realCorners
-	// 					),
-	// 			  }
-	// 			: null,
-	// 		cancha: elementos.cancha
-	// 			? {
-	// 					...elementos.cancha,
-	// 					realCorners: normalizeCorners(
-	// 						elementos.cancha.realCorners
-	// 					),
-	// 			  }
-	// 			: null,
-	// 	};
-
-	// 	const normalizedCoordinates = normalizeCorners(coordinates);
-
-	// 	console.log("✅ Datos normalizados:", {
-	// 		coordenadasOriginales: coordinates[0],
-	// 		coordenadasNormalizadas: normalizedCoordinates[0],
-	// 		primerAulaOriginal: elementos.inicial[0]?.realCorners[0],
-	// 		primerAulaNormalizada:
-	// 			normalizedElementos.inicial[0]?.realCorners[0],
-	// 	});
-
-	// 	return {
-	// 		elementos: normalizedElementos,
-	// 		coordinates: normalizedCoordinates,
-	// 	};
-	// }, [isReady, elementos, coordinates]);
 	const normalizedData = useMemo(() => {
 		if (!isReady || !completarElementosConDistribution || !coordinates)
 			return null;
@@ -1137,268 +1106,6 @@ const View3D = ({ school, view, space, spaceEntrance }) => {
 	return (
 		<Box sx={{ width: "100%", height: "100vh", position: "relative" }}>
 			{/* ✅ Panel de información con MUI */}
-			<Paper
-				elevation={4}
-				sx={{
-					position: "absolute",
-					top: 16,
-					left: 16,
-					p: 2.5,
-					maxWidth: 280,
-					zIndex: 10,
-					bgcolor: "background.paper",
-				}}
-			>
-				<Typography variant="h6" fontWeight="bold" gutterBottom>
-					Vista 3D
-				</Typography>
-
-				{school?.name && (
-					<Typography
-						variant="caption"
-						color="text.secondary"
-						display="block"
-						sx={{ mb: 1 }}
-					>
-						{school.name}
-					</Typography>
-				)}
-
-				<Stack direction="row" spacing={1} sx={{ mb: 1 }}>
-					<Chip
-						label={`Piso ${currentFloor}/${totalFloors}`}
-						size="small"
-						color="primary"
-						variant="outlined"
-					/>
-					<Chip
-						label={
-							layoutMode === "horizontal"
-								? "↔️ Horizontal"
-								: "↕️ Vertical"
-						}
-						size="small"
-						color="secondary"
-						variant="outlined"
-					/>
-				</Stack>
-				{/* ✅ CONTROLES DE PISOS */}
-				{totalFloors > 1 && (
-					<>
-						<Typography
-							variant="caption"
-							fontWeight="bold"
-							display="block"
-							sx={{ mb: 1 }}
-						>
-							Pisos visibles:
-						</Typography>
-
-						<FormGroup sx={{ mb: 1 }}>
-							{Array.from(
-								{ length: totalFloors },
-								(_, i) => i + 1
-							).map((floor) => (
-								<FormControlLabel
-									key={floor}
-									control={
-										<Checkbox
-											size="small"
-											checked={visibleFloors.includes(
-												floor
-											)}
-											onChange={() => toggleFloor(floor)}
-										/>
-									}
-									label={
-										<Typography variant="caption">
-											Piso {floor}
-										</Typography>
-									}
-								/>
-							))}
-						</FormGroup>
-
-						<Stack direction="row" spacing={0.5} sx={{ mb: 1.5 }}>
-							<Button
-								size="small"
-								variant="outlined"
-								onClick={showAllFloors}
-								sx={{ fontSize: "0.65rem", py: 0.5 }}
-							>
-								Ver todos
-							</Button>
-							<Button
-								size="small"
-								variant="outlined"
-								onClick={() => showOnlyFloor(1)}
-								sx={{ fontSize: "0.65rem", py: 0.5 }}
-							>
-								Solo piso 1
-							</Button>
-						</Stack>
-
-						<Divider sx={{ my: 1.5 }} />
-					</>
-				)}
-
-				<Divider sx={{ my: 1.5 }} />
-
-				<Stack spacing={0.5} sx={{ fontSize: "0.75rem" }}>
-					<Box
-						sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
-					>
-						<Box
-							sx={{
-								width: 12,
-								height: 12,
-								bgcolor: "#eab308",
-								borderRadius: 0.5,
-							}}
-						/>
-						<Typography variant="caption">
-							Inicial: {normalizedElementos.inicial.length} aulas
-						</Typography>
-					</Box>
-					<Box
-						sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
-					>
-						<Box
-							sx={{
-								width: 12,
-								height: 12,
-								bgcolor: "#3b82f6",
-								borderRadius: 0.5,
-							}}
-						/>
-						<Typography variant="caption">
-							Primaria: {normalizedElementos.primaria.length}{" "}
-							aulas
-						</Typography>
-					</Box>
-					<Box
-						sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
-					>
-						<Box
-							sx={{
-								width: 12,
-								height: 12,
-								bgcolor: "#ef4444",
-								borderRadius: 0.5,
-							}}
-						/>
-						<Typography variant="caption">
-							Secundaria: {normalizedElementos.secundaria.length}{" "}
-							aulas
-						</Typography>
-					</Box>
-					<Box
-						sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
-					>
-						<Box
-							sx={{
-								width: 12,
-								height: 12,
-								bgcolor: "#a855f7",
-								borderRadius: 0.5,
-							}}
-						/>
-						<Typography variant="caption">
-							Baños: {normalizedElementos.banos.length}
-						</Typography>
-					</Box>
-					<Box
-						sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
-					>
-						<Box
-							sx={{
-								width: 12,
-								height: 12,
-								bgcolor: "#6b7280",
-								borderRadius: 0.5,
-							}}
-						/>
-						<Typography variant="caption">
-							Escaleras: {normalizedElementos.escaleras.length}
-						</Typography>
-					</Box>
-					<Box
-						sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
-					>
-						<Box
-							sx={{
-								width: 12,
-								height: 12,
-								bgcolor: "#ec4899",
-								borderRadius: 0.5,
-							}}
-						/>
-						<Typography variant="caption">
-							Ambientes: {normalizedElementos.ambientes.length}
-						</Typography>
-					</Box>
-					<Box
-						sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
-					>
-						<Box
-							sx={{
-								width: 12,
-								height: 12,
-								bgcolor: "#fb923c",
-								borderRadius: 0.5,
-							}}
-						/>
-						<Typography variant="caption">
-							Laterales: {normalizedElementos.laterales.length}
-						</Typography>
-					</Box>
-				</Stack>
-				<Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-					Exportar modelo 3D
-				</Typography>
-
-				<Stack spacing={1}>
-					<Button
-						variant="contained"
-						size="small"
-						//startIcon={<DownloadIcon />}
-						onClick={() => handleExport("glb")}
-						fullWidth
-						color="success"
-					>
-						GLB (Rhino 7+) ⭐
-					</Button>
-					<Button
-						variant="contained"
-						size="small"
-						//startIcon={<DownloadIcon />}
-						onClick={() => handleExport("obj")}
-						fullWidth
-					>
-						OBJ (Rhino/AutoCAD)
-					</Button>
-				</Stack>
-
-				<Snackbar
-					open={exportStatus.open}
-					autoHideDuration={4000}
-					onClose={() =>
-						setExportStatus({ ...exportStatus, open: false })
-					}
-					anchorOrigin={{ vertical: "top", horizontal: "center" }}
-				>
-					<Alert
-						severity={exportStatus.severity}
-						onClose={() =>
-							setExportStatus({ ...exportStatus, open: false })
-						}
-					>
-						{exportStatus.message}
-					</Alert>
-				</Snackbar>
-
-				<Divider sx={{ my: 1.5 }} />
-			</Paper>
 
 			{/* ✅ Botones de vista con MUI */}
 			<Stack
@@ -1674,17 +1381,27 @@ const View3D = ({ school, view, space, spaceEntrance }) => {
 				/>
 
 				<group rotation={[-Math.PI / 2, 0, 0]}>
-					<gridHelper
+					{/* <gridHelper
 						args={[distanciaMaxima * 3, 100, "#888888", "#cccccc"]}
 						position={[collegeCenter.x, collegeCenter.y, -0.1]}
 						rotation={[Math.PI / 2, 0, 0]}
-					/>
+					/> */}
 
 					<Suspense fallback={null}>
-						<Terreno coordinates={normalizedCoordinates} />
-
+						<Terreno
+							coordinates={normalizedCoordinates}
+							maxRectangle={normalizedMaxRectangle}
+						/>
+						<VegetacionAreaVerde
+							coordinates={normalizedCoordinates}
+							maxRectangle={normalizedMaxRectangle}
+						/>
 						{normalizedElementos.cancha && (
-							<Cancha cancha={normalizedElementos.cancha} />
+							//<Cancha cancha={normalizedElementos.cancha} />
+							<CanchaFutbol
+								position={[-4, 0, 0]}
+								rotation={[Math.PI / 2, Math.PI / 3, 0]}
+							/>
 						)}
 						{maxRectangle && (
 							<>
@@ -1931,36 +1648,106 @@ const Edificio = ({ elementos, currentFloor, totalFloors, onElementClick }) => {
 	);
 };
 
-const Terreno = ({ coordinates }) => {
+// const Terreno = ({ coordinates }) => {
+// 	if (!coordinates || coordinates.length < 3) return null;
+
+// 	const shape = new THREE.Shape();
+// 	shape.moveTo(coordinates[0].east, coordinates[0].north);
+// 	for (let i = 1; i < coordinates.length; i++) {
+// 		shape.lineTo(coordinates[i].east, coordinates[i].north);
+// 	}
+// 	shape.closePath();
+
+// 	return (
+// 		<group>
+// 			{/* ✅ CAMBIO: Quitar rotation y position Z en 0 */}
+// 			<mesh
+// 				receiveShadow
+// 				position={[0, 0, 0]} // Era -0.05
+// 			>
+// 				<shapeGeometry args={[shape]} />
+// 				<meshStandardMaterial
+// 					color="#8b7355"
+// 					side={THREE.DoubleSide}
+// 					roughness={0.8}
+// 				/>
+// 			</mesh>
+
+// 			{/* Borde del terreno */}
+// 			<lineSegments position={[0, 0, 0.01]}>
+// 				<edgesGeometry
+// 					attach="geometry"
+// 					args={[new THREE.ShapeGeometry(shape)]}
+// 				/>
+// 				<lineBasicMaterial
+// 					attach="material"
+// 					color="#3b82f6"
+// 					linewidth={3}
+// 				/>
+// 			</lineSegments>
+// 		</group>
+// 	);
+// };
+
+// components3D/Cancha.jsx
+const Terreno = ({ coordinates, maxRectangle }) => {
 	if (!coordinates || coordinates.length < 3) return null;
 
-	const shape = new THREE.Shape();
-	shape.moveTo(coordinates[0].east, coordinates[0].north);
+	// ✅ SHAPE DEL TERRENO COMPLETO (Verde)
+	const terrenoShape = new THREE.Shape();
+	terrenoShape.moveTo(coordinates[0].east, coordinates[0].north);
 	for (let i = 1; i < coordinates.length; i++) {
-		shape.lineTo(coordinates[i].east, coordinates[i].north);
+		terrenoShape.lineTo(coordinates[i].east, coordinates[i].north);
 	}
-	shape.closePath();
+	terrenoShape.closePath();
+
+	// ✅ SHAPE DEL ÁREA INTERNA (Cemento) - si existe maxRectangle
+	let areaInternaShape = null;
+	if (maxRectangle?.corners && maxRectangle.corners.length >= 4) {
+		areaInternaShape = new THREE.Shape();
+		areaInternaShape.moveTo(
+			maxRectangle.corners[0].east,
+			maxRectangle.corners[0].north
+		);
+		for (let i = 1; i < maxRectangle.corners.length; i++) {
+			areaInternaShape.lineTo(
+				maxRectangle.corners[i].east,
+				maxRectangle.corners[i].north
+			);
+		}
+		areaInternaShape.closePath();
+	}
 
 	return (
 		<group>
-			{/* ✅ CAMBIO: Quitar rotation y position Z en 0 */}
-			<mesh
-				receiveShadow
-				position={[0, 0, 0]} // Era -0.05
-			>
-				<shapeGeometry args={[shape]} />
+			{/* ✅ TERRENO BASE - VERDE (área completa) */}
+			<mesh receiveShadow position={[0, 0, 0]}>
+				<shapeGeometry args={[terrenoShape]} />
 				<meshStandardMaterial
-					color="#8b7355"
+					color="#4ade80" // Verde césped
 					side={THREE.DoubleSide}
-					roughness={0.8}
+					roughness={0.9}
 				/>
 			</mesh>
 
-			{/* Borde del terreno */}
-			<lineSegments position={[0, 0, 0.01]}>
+			{/* ✅ ÁREA INTERNA - CEMENTO (dentro del cerco) */}
+			{areaInternaShape && (
+				<mesh receiveShadow position={[0, 0, 0.01]}>
+					<shapeGeometry args={[areaInternaShape]} />
+					<meshStandardMaterial
+						color="#9ca3af" // Gris cemento
+						side={THREE.DoubleSide}
+						roughness={0.95}
+						metalness={0.1}
+					/>
+				</mesh>
+			)}
+
+			{/* ✅ BORDE DEL TERRENO COMPLETO */}
+			<lineSegments position={[0, 0, 0.02]}>
 				<edgesGeometry
 					attach="geometry"
-					args={[new THREE.ShapeGeometry(shape)]}
+					args={[new THREE.ShapeGeometry(terrenoShape)]}
 				/>
 				<lineBasicMaterial
 					attach="material"
@@ -1968,11 +1755,25 @@ const Terreno = ({ coordinates }) => {
 					linewidth={3}
 				/>
 			</lineSegments>
+
+			{/* ✅ BORDE DEL ÁREA INTERNA */}
+			{areaInternaShape && (
+				<lineSegments position={[0, 0, 0.03]}>
+					<edgesGeometry
+						attach="geometry"
+						args={[new THREE.ShapeGeometry(areaInternaShape)]}
+					/>
+					<lineBasicMaterial
+						attach="material"
+						color="#6b7280"
+						linewidth={2}
+					/>
+				</lineSegments>
+			)}
 		</group>
 	);
 };
 
-// components3D/Cancha.jsx
 const Cancha = ({ cancha }) => {
 	if (!cancha || !cancha.realCorners || cancha.realCorners.length < 4) {
 		return null;
@@ -2027,6 +1828,344 @@ const Cancha = ({ cancha }) => {
 		</group>
 	);
 };
+
+const pointInPolygon = (point, polygon) => {
+	let inside = false;
+	for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+		const xi = polygon[i].east;
+		const yi = polygon[i].north;
+		const xj = polygon[j].east;
+		const yj = polygon[j].north;
+
+		const intersect =
+			yi > point.north !== yj > point.north &&
+			point.east < ((xj - xi) * (point.north - yi)) / (yj - yi) + xi;
+
+		if (intersect) inside = !inside;
+	}
+	return inside;
+};
+
+// Componente de árbol simple con geometrías
+// const ArbolSimple = ({ position, scale = 1 }) => {
+// 	const trunkHeight = 2 * scale;
+// 	const trunkRadius = 0.15 * scale;
+// 	const foliageRadius = 1.2 * scale;
+
+// 	return (
+// 		<group position={position}>
+// 			{/* Tronco */}
+// 			<mesh
+// 				position={[0, 0, trunkHeight / 2]}
+// 				rotation={[Math.PI / 2, 0, 0]} // ✅ ESTA ES LA CORRECCIÓN
+// 				castShadow
+// 			>
+// 				<cylinderGeometry
+// 					args={[trunkRadius, trunkRadius, trunkHeight, 8]}
+// 				/>
+// 				<meshStandardMaterial color="#4a2511" roughness={0.9} />
+// 			</mesh>
+
+// 			{/* Follaje - Esfera */}
+// 			<mesh
+// 				position={[0, 0, trunkHeight + foliageRadius * 0.6]}
+// 				castShadow
+// 			>
+// 				<sphereGeometry args={[foliageRadius, 8, 8]} />
+// 				<meshStandardMaterial color="#2d5016" roughness={0.8} />
+// 			</mesh>
+// 		</group>
+// 	);
+// };
+const ArbolGLTF = ({ position, scale = 1, rotation = [0, 0, 0] }) => {
+	const { scene } = useLoader(GLTFLoader, "/models/tree/scene.gltf");
+
+	return (
+		<primitive
+			object={scene.clone()}
+			position={position}
+			scale={[scale, scale, scale]}
+			rotation={rotation}
+			castShadow
+			receiveShadow
+		/>
+	);
+};
+
+// Precargar el modelo para mejor rendimiento
+useLoader.preload(GLTFLoader, "/models/tree/scene.gltf");
+
+// Arbusto simple
+const ArbustoSimple = ({ position, scale = 1 }) => {
+	const radius = 0.6 * scale;
+
+	return (
+		<group position={position}>
+			<mesh position={[0, 0, radius * 0.5]} castShadow>
+				<sphereGeometry args={[radius, 8, 8]} />
+				<meshStandardMaterial color="#3a6b2e" roughness={0.85} />
+			</mesh>
+		</group>
+	);
+};
+
+// ✅ DISTRIBUCIÓN DE VEGETACIÓN EN ÁREA VERDE (CORREGIDA)
+// const VegetacionAreaVerde = ({ coordinates, maxRectangle }) => {
+// 	const vegetacion = useMemo(() => {
+// 		if (!coordinates || coordinates.length < 3) return [];
+// 		if (!maxRectangle?.corners || maxRectangle.corners.length < 4)
+// 			return [];
+
+// 		const items = [];
+// 		const numArboles = 12; // Cantidad de árboles
+// 		const numArbustos = 18; // Cantidad de arbustos
+
+// 		// Calcular bounds del terreno para generar puntos aleatorios
+// 		const terrainEasts = coordinates.map((c) => c.east);
+// 		const terrainNorths = coordinates.map((c) => c.north);
+// 		const minEast = Math.min(...terrainEasts);
+// 		const maxEast = Math.max(...terrainEasts);
+// 		const minNorth = Math.min(...terrainNorths);
+// 		const maxNorth = Math.max(...terrainNorths);
+
+// 		// ✅ Margen de seguridad para no poner árboles muy cerca del cerco
+// 		const margin = 1.5;
+
+// 		// ✅ FUNCIÓN MEJORADA: Verificar si está en área verde
+// 		const isInGreenArea = (east, north) => {
+// 			const point = { east, north };
+
+// 			// Debe estar DENTRO del terreno completo
+// 			const inTerrain = pointInPolygon(point, coordinates);
+
+// 			// Debe estar FUERA del área interna (cemento)
+// 			const inInnerArea = pointInPolygon(point, maxRectangle.corners);
+
+// 			return inTerrain && !inInnerArea;
+// 		};
+
+// 		// ✅ Generar árboles
+// 		for (let i = 0; i < numArboles; i++) {
+// 			let east, north;
+// 			let attempts = 0;
+
+// 			do {
+// 				east =
+// 					minEast +
+// 					margin +
+// 					Math.random() * (maxEast - minEast - 2 * margin);
+// 				north =
+// 					minNorth +
+// 					margin +
+// 					Math.random() * (maxNorth - minNorth - 2 * margin);
+// 				attempts++;
+// 			} while (!isInGreenArea(east, north) && attempts < 100);
+
+// 			if (isInGreenArea(east, north)) {
+// 				items.push({
+// 					type: "arbol",
+// 					position: [east, north, 0],
+// 					scale: 0.7 + Math.random() * 0.5, // Variación de tamaño
+// 					id: `arbol-${i}`,
+// 				});
+// 			}
+// 		}
+
+// 		// ✅ Generar arbustos
+// 		for (let i = 0; i < numArbustos; i++) {
+// 			let east, north;
+// 			let attempts = 0;
+
+// 			do {
+// 				east =
+// 					minEast +
+// 					margin +
+// 					Math.random() * (maxEast - minEast - 2 * margin);
+// 				north =
+// 					minNorth +
+// 					margin +
+// 					Math.random() * (maxNorth - minNorth - 2 * margin);
+// 				attempts++;
+// 			} while (!isInGreenArea(east, north) && attempts < 100);
+
+// 			if (isInGreenArea(east, north)) {
+// 				items.push({
+// 					type: "arbusto",
+// 					position: [east, north, 0],
+// 					scale: 0.6 + Math.random() * 0.4,
+// 					id: `arbusto-${i}`,
+// 				});
+// 			}
+// 		}
+
+// 		console.log(
+// 			`🌳 Vegetación generada: ${
+// 				items.filter((i) => i.type === "arbol").length
+// 			} árboles, ${
+// 				items.filter((i) => i.type === "arbusto").length
+// 			} arbustos`
+// 		);
+
+// 		return items;
+// 	}, [coordinates, maxRectangle]);
+
+// 	return (
+// 		<group>
+// 			{vegetacion.map((item) =>
+// 				item.type === "arbol" ? (
+// 					<ArbolSimple
+// 						key={item.id}
+// 						position={item.position}
+// 						scale={item.scale}
+// 					/>
+// 				) : (
+// 					<ArbustoSimple
+// 						key={item.id}
+// 						position={item.position}
+// 						scale={item.scale}
+// 					/>
+// 				)
+// 			)}
+// 		</group>
+// 	);
+// };
+const VegetacionAreaVerde = ({ coordinates, maxRectangle }) => {
+	const vegetacion = useMemo(() => {
+		if (!coordinates || coordinates.length < 3) return [];
+		if (!maxRectangle?.corners || maxRectangle.corners.length < 4)
+			return [];
+
+		const items = [];
+		const numArboles = 20; // Cantidad de árboles
+		const numArbustos = 18; // Cantidad de arbustos
+
+		// Calcular bounds del terreno para generar puntos aleatorios
+		const terrainEasts = coordinates.map((c) => c.east);
+		const terrainNorths = coordinates.map((c) => c.north);
+		const minEast = Math.min(...terrainEasts);
+		const maxEast = Math.max(...terrainEasts);
+		const minNorth = Math.min(...terrainNorths);
+		const maxNorth = Math.max(...terrainNorths);
+
+		const margin = 1.5;
+
+		const isInGreenArea = (east, north) => {
+			const point = { east, north };
+			const inTerrain = pointInPolygon(point, coordinates);
+			const inInnerArea = pointInPolygon(point, maxRectangle.corners);
+			return inTerrain && !inInnerArea;
+		};
+
+		// ✅ Generar árboles GLTF
+		for (let i = 0; i < numArboles; i++) {
+			let east, north;
+			let attempts = 0;
+
+			do {
+				east =
+					minEast +
+					margin +
+					Math.random() * (maxEast - minEast - 2 * margin);
+				north =
+					minNorth +
+					margin +
+					Math.random() * (maxNorth - minNorth - 2 * margin);
+				attempts++;
+			} while (!isInGreenArea(east, north) && attempts < 100);
+
+			if (isInGreenArea(east, north)) {
+				items.push({
+					type: "arbol_gltf",
+					position: [east, north, 0],
+					scale: 0.015 + Math.random() * 15, // Escala pequeña (el modelo es grande)
+					//rotation: [0, 0, Math.random() * Math.PI * 2], // Rotación aleatoria en Z
+					rotation: [Math.PI / 2, 0, 0],
+					id: `arbol-gltf-${i}`,
+				});
+			}
+		}
+
+		// ✅ Generar arbustos (geometrías simples)
+		for (let i = 0; i < numArbustos; i++) {
+			let east, north;
+			let attempts = 0;
+
+			do {
+				east =
+					minEast +
+					margin +
+					Math.random() * (maxEast - minEast - 2 * margin);
+				north =
+					minNorth +
+					margin +
+					Math.random() * (maxNorth - minNorth - 2 * margin);
+				attempts++;
+			} while (!isInGreenArea(east, north) && attempts < 100);
+
+			if (isInGreenArea(east, north)) {
+				items.push({
+					type: "arbusto",
+					position: [east, north, 0],
+					scale: 0.6 + Math.random() * 0.4,
+					id: `arbusto-${i}`,
+				});
+			}
+		}
+
+		console.log(
+			`🌳 Vegetación generada: ${
+				items.filter((i) => i.type === "arbol_gltf").length
+			} árboles GLTF, ${
+				items.filter((i) => i.type === "arbusto").length
+			} arbustos`
+		);
+
+		return items;
+	}, [coordinates, maxRectangle]);
+
+	return (
+		<group>
+			{vegetacion.map((item) => {
+				if (item.type === "arbol_gltf") {
+					return (
+						<ArbolGLTF
+							key={item.id}
+							position={item.position}
+							scale={item.scale}
+							rotation={item.rotation}
+						/>
+					);
+				} else if (item.type === "arbusto") {
+					return (
+						<ArbustoSimple
+							key={item.id}
+							position={item.position}
+							scale={item.scale}
+						/>
+					);
+				}
+				return null;
+			})}
+		</group>
+	);
+};
+
+const CanchaFutbol = ({ position, rotation }) => {
+	const { nodes, materials } = useLoader(
+		GLTFLoader,
+		"/models/basketball_court/scene.gltf"
+	);
+
+	return (
+		<group position={position} rotation={rotation} scale={[1, 1, 1]}>
+			<mesh
+				geometry={nodes["Object_4"].geometry}
+				material={materials["SimpleCity_Texture"]}
+			/>
+		</group>
+	);
+};
+useLoader.preload(GLTFLoader, "/models/basketball_court/scene.gltf");
 
 // components3D/EdificioMultiPiso.jsx o en el mismo archivo
 // const EdificioMultiPiso = ({
@@ -2680,6 +2819,81 @@ const Cancha = ({ cancha }) => {
 // 	);
 // };
 
+const detectarAulasConEstructuraEncima = (distributeByFloor, totalFloors) => {
+	const aulasConTechoPlano = new Set();
+
+	// Para cada piso excepto el último
+	for (let floor = 1; floor < totalFloors; floor++) {
+		const pisoActual = distributeByFloor[floor];
+		const pisoSuperior = distributeByFloor[floor + 1];
+
+		if (!pisoActual || !pisoSuperior) continue;
+
+		// Función para verificar si dos aulas se solapan
+		const aulasSeSolapan = (corners1, corners2, tolerance = 0.5) => {
+			// Calcular centros
+			const center1 = {
+				east:
+					corners1.reduce((sum, c) => sum + c.east, 0) /
+					corners1.length,
+				north:
+					corners1.reduce((sum, c) => sum + c.north, 0) /
+					corners1.length,
+			};
+			const center2 = {
+				east:
+					corners2.reduce((sum, c) => sum + c.east, 0) /
+					corners2.length,
+				north:
+					corners2.reduce((sum, c) => sum + c.north, 0) /
+					corners2.length,
+			};
+
+			// Distancia entre centros
+			const distancia = Math.sqrt(
+				Math.pow(center2.east - center1.east, 2) +
+					Math.pow(center2.north - center1.north, 2)
+			);
+
+			// Si la distancia es muy pequeña, se consideran en la misma posición
+			return distancia < tolerance;
+		};
+
+		// Revisar cada tipo de aula
+		const tipos = ["inicial", "primaria", "secundaria"];
+
+		tipos.forEach((tipo) => {
+			const aulasInferiores = pisoActual[tipo] || [];
+			const aulasSuperiores = pisoSuperior[tipo] || [];
+
+			aulasInferiores.forEach((aulaInferior, idxInf) => {
+				// Verificar si alguna aula superior está encima
+				const tieneAulaEncima = aulasSuperiores.some((aulaSuperior) =>
+					aulasSeSolapan(
+						aulaInferior.realCorners,
+						aulaSuperior.realCorners
+					)
+				);
+
+				if (tieneAulaEncima) {
+					// Crear identificador único para esta aula
+					const aulaId = `${tipo}-${floor}-${idxInf}`;
+					aulasConTechoPlano.add(aulaId);
+
+					console.log(
+						`🏢 Aula ${tipo} ${
+							idxInf + 1
+						} del piso ${floor} tiene estructura encima → TECHO PLANO`
+					);
+				}
+			});
+		});
+	}
+
+	console.log(`📋 Aulas con techo plano:`, Array.from(aulasConTechoPlano));
+	return aulasConTechoPlano;
+};
+
 const EdificioMultiPiso = ({
 	elementos,
 	totalFloors,
@@ -2689,6 +2903,8 @@ const EdificioMultiPiso = ({
 }) => {
 	const ALTURA_PISO = 3;
 	const ANCHO_CORREDOR = 1.5;
+	const ANCHO_VEREDA = 1.5;
+	const OFFSET_VEREDA = -1.8;
 
 	// Calcular centro del colegio
 	const collegeCenter = useMemo(() => {
@@ -2813,6 +3029,501 @@ const EdificioMultiPiso = ({
 		return result;
 	}, [elementos, distribution, totalFloors]);
 
+	const aulasConTechoPlano = useMemo(() => {
+		if (!distributeByFloor || totalFloors <= 1) return new Set();
+		return detectarAulasConEstructuraEncima(distributeByFloor, totalFloors);
+	}, [distributeByFloor, totalFloors]);
+
+	// ✅ CALCULAR VEREDAS PARA CADA PABELLÓN (solo piso 1)
+	// const veredas = useMemo(() => {
+	// 	if (!distributeByFloor || !distributeByFloor[1]) return [];
+
+	// 	const veredasCalculadas = [];
+	// 	const piso1 = distributeByFloor[1];
+
+	// 	// ✅ FUNCIÓN PARA CALCULAR EL LADO DE LA VEREDA (igual que doorSide)
+	// 	const calcularLadoVereda = (corners, centerX, centerY, angle) => {
+	// 		const toCenter = {
+	// 			x: collegeCenter.x - centerX,
+	// 			y: collegeCenter.y - centerY,
+	// 		};
+
+	// 		const walls = {
+	// 			front: { x: 0, y: -1 },
+	// 			back: { x: 0, y: 1 },
+	// 			left: { x: -1, y: 0 },
+	// 			right: { x: 1, y: 0 },
+	// 		};
+
+	// 		const cos = Math.cos(-angle);
+	// 		const sin = Math.sin(-angle);
+	// 		const localX = toCenter.x * cos - toCenter.y * sin;
+	// 		const localY = toCenter.x * sin + toCenter.y * cos;
+
+	// 		const length = Math.sqrt(localX * localX + localY * localY);
+	// 		const normX = localX / length;
+	// 		const normY = localY / length;
+
+	// 		let maxDot = -Infinity;
+	// 		let bestSide = "front";
+
+	// 		for (const [side, wallVec] of Object.entries(walls)) {
+	// 			const dot = normX * wallVec.x + normY * wallVec.y;
+	// 			if (dot > maxDot) {
+	// 				maxDot = dot;
+	// 				bestSide = side;
+	// 			}
+	// 		}
+
+	// 		return bestSide;
+	// 	};
+
+	// 	// ✅ FUNCIÓN MEJORADA PARA CALCULAR VEREDA
+	// 	const calcularVereda = (aulas, tipo) => {
+	// 		if (!aulas || aulas.length === 0) return null;
+
+	// 		// ✅ BUSCAR AMBIENTES RELACIONADOS CON ESTE PABELLÓN
+	// 		const ambientesRelacionados = [];
+
+	// 		// Filtrar ambientes que están cerca de este pabellón
+	// 		piso1.ambientes?.forEach((ambiente) => {
+	// 			// Verificar si el ambiente está relacionado con este nivel
+	// 			const nivelAmbiente = ambiente.nivel?.toLowerCase() || "";
+	// 			const tipoLower = tipo.toLowerCase();
+
+	// 			if (nivelAmbiente.includes(tipoLower)) {
+	// 				ambientesRelacionados.push(ambiente);
+	// 			}
+	// 		});
+
+	// 		// Filtrar laterales relacionados
+	// 		piso1.laterales?.forEach((lateral) => {
+	// 			const nivelLateral = lateral.nivel?.toLowerCase() || "";
+	// 			const tipoLower = tipo.toLowerCase();
+
+	// 			if (nivelLateral.includes(tipoLower)) {
+	// 				ambientesRelacionados.push(lateral);
+	// 			}
+	// 		});
+
+	// 		// ✅ COMBINAR AULAS + AMBIENTES PARA CALCULAR LONGITUD COMPLETA
+	// 		const todosElementos = [...aulas, ...ambientesRelacionados];
+
+	// 		console.log(`🚶 Vereda ${tipo}:`, {
+	// 			aulas: aulas.length,
+	// 			ambientes: ambientesRelacionados.length,
+	// 			total: todosElementos.length,
+	// 		});
+
+	// 		// ✅ CALCULAR CENTRO Y ÁNGULO DE LA PRIMERA AULA
+	// 		const primeraAula = aulas[0];
+	// 		const corners = primeraAula.realCorners;
+
+	// 		const centerX =
+	// 			corners.reduce((sum, c) => sum + c.east, 0) / corners.length;
+	// 		const centerY =
+	// 			corners.reduce((sum, c) => sum + c.north, 0) / corners.length;
+
+	// 		const angle = Math.atan2(
+	// 			corners[1].north - corners[0].north,
+	// 			corners[1].east - corners[0].east
+	// 		);
+
+	// 		// ✅ CALCULAR LADO DE LA VEREDA (igual que doorSide)
+	// 		const doorSide = calcularLadoVereda(
+	// 			corners,
+	// 			centerX,
+	// 			centerY,
+	// 			angle
+	// 		);
+
+	// 		// ✅ ENCONTRAR ELEMENTO MÁS EXTREMO DEL PABELLÓN
+	// 		let elementoInicio = todosElementos[0];
+	// 		let elementoFin = todosElementos[todosElementos.length - 1];
+
+	// 		// ✅ CALCULAR PUNTOS SEGÚN EL LADO DE LA PUERTA
+	// 		let startPoint, endPoint, lado;
+
+	// 		switch (doorSide) {
+	// 			case "front":
+	// 				// Puertas al frente → vereda al frente (inferior en geometría)
+	// 				lado = "inferior";
+	// 				startPoint = {
+	// 					east: elementoInicio.realCorners[0].east,
+	// 					north: elementoInicio.realCorners[0].north,
+	// 				};
+	// 				endPoint = {
+	// 					east: elementoFin.realCorners[1].east,
+	// 					north: elementoFin.realCorners[1].north,
+	// 				};
+	// 				break;
+
+	// 			case "back":
+	// 				// Puertas atrás → vereda atrás (superior en geometría)
+	// 				lado = "superior";
+	// 				startPoint = {
+	// 					east: elementoInicio.realCorners[3].east,
+	// 					north: elementoInicio.realCorners[3].north,
+	// 				};
+	// 				endPoint = {
+	// 					east: elementoFin.realCorners[2].east,
+	// 					north: elementoFin.realCorners[2].north,
+	// 				};
+	// 				break;
+
+	// 			case "left":
+	// 				// Puertas a la izquierda → vereda a la izquierda
+	// 				lado = "izquierda";
+	// 				startPoint = {
+	// 					east: elementoInicio.realCorners[0].east,
+	// 					north: elementoInicio.realCorners[0].north,
+	// 				};
+	// 				endPoint = {
+	// 					east: elementoFin.realCorners[3].east,
+	// 					north: elementoFin.realCorners[3].north,
+	// 				};
+	// 				break;
+
+	// 			case "right":
+	// 				// Puertas a la derecha → vereda a la derecha
+	// 				lado = "derecha";
+	// 				startPoint = {
+	// 					east: elementoInicio.realCorners[1].east,
+	// 					north: elementoInicio.realCorners[1].north,
+	// 				};
+	// 				endPoint = {
+	// 					east: elementoFin.realCorners[2].east,
+	// 					north: elementoFin.realCorners[2].north,
+	// 				};
+	// 				break;
+
+	// 			default:
+	// 				return null;
+	// 		}
+
+	// 		console.log(`  → Lado de vereda ${tipo}: ${doorSide} → ${lado}`);
+
+	// 		return {
+	// 			startPoint,
+	// 			endPoint,
+	// 			lado,
+	// 			tipo,
+	// 			doorSide, // Para debug
+	// 		};
+	// 	};
+
+	// 	// ✅ VEREDA INICIAL (con ambientes)
+	// 	if (piso1.inicial && piso1.inicial.length > 0) {
+	// 		const veredaInicial = calcularVereda(piso1.inicial, "inicial");
+	// 		if (veredaInicial) veredasCalculadas.push(veredaInicial);
+	// 	}
+
+	// 	// ✅ VEREDA PRIMARIA (con ambientes)
+	// 	if (piso1.primaria && piso1.primaria.length > 0) {
+	// 		const veredaPrimaria = calcularVereda(piso1.primaria, "primaria");
+	// 		if (veredaPrimaria) veredasCalculadas.push(veredaPrimaria);
+	// 	}
+
+	// 	// ✅ VEREDA SECUNDARIA (con ambientes)
+	// 	if (piso1.secundaria && piso1.secundaria.length > 0) {
+	// 		const veredaSecundaria = calcularVereda(
+	// 			piso1.secundaria,
+	// 			"secundaria"
+	// 		);
+	// 		if (veredaSecundaria) veredasCalculadas.push(veredaSecundaria);
+	// 	}
+
+	// 	console.log("🚶 Veredas calculadas finales:", veredasCalculadas);
+	// 	return veredasCalculadas;
+	// }, [distributeByFloor, collegeCenter]);
+	const veredas = useMemo(() => {
+		if (!distributeByFloor || !distributeByFloor[1]) return [];
+
+		const veredasCalculadas = [];
+		const piso1 = distributeByFloor[1];
+
+		// ✅ FUNCIÓN PARA CALCULAR EL LADO DE LA VEREDA
+		const calcularLadoVereda = (corners, centerX, centerY, angle) => {
+			const toCenter = {
+				x: collegeCenter.x - centerX,
+				y: collegeCenter.y - centerY,
+			};
+
+			const walls = {
+				front: { x: 0, y: -1 },
+				back: { x: 0, y: 1 },
+				left: { x: -1, y: 0 },
+				right: { x: 1, y: 0 },
+			};
+
+			const cos = Math.cos(-angle);
+			const sin = Math.sin(-angle);
+			const localX = toCenter.x * cos - toCenter.y * sin;
+			const localY = toCenter.x * sin + toCenter.y * cos;
+
+			const length = Math.sqrt(localX * localX + localY * localY);
+			const normX = localX / length;
+			const normY = localY / length;
+
+			let maxDot = -Infinity;
+			let bestSide = "front";
+
+			for (const [side, wallVec] of Object.entries(walls)) {
+				const dot = normX * wallVec.x + normY * wallVec.y;
+				if (dot > maxDot) {
+					maxDot = dot;
+					bestSide = side;
+				}
+			}
+
+			return bestSide;
+		};
+
+		// ✅ FUNCIÓN PARA CREAR VEREDA DE UN SOLO ELEMENTO
+		const crearVeredaElemento = (elemento, tipo, index) => {
+			if (!elemento?.realCorners) return null;
+
+			const corners = elemento.realCorners;
+			const centerX =
+				corners.reduce((sum, c) => sum + c.east, 0) / corners.length;
+			const centerY =
+				corners.reduce((sum, c) => sum + c.north, 0) / corners.length;
+			const angle = Math.atan2(
+				corners[1].north - corners[0].north,
+				corners[1].east - corners[0].east
+			);
+
+			const doorSide = calcularLadoVereda(
+				corners,
+				centerX,
+				centerY,
+				angle
+			);
+
+			let startPoint, endPoint, lado;
+
+			switch (doorSide) {
+				case "front":
+					lado = "inferior";
+					startPoint = {
+						east: corners[0].east,
+						north: corners[0].north,
+					};
+					endPoint = {
+						east: corners[1].east,
+						north: corners[1].north,
+					};
+					break;
+
+				case "back":
+					lado = "superior";
+					startPoint = {
+						east: corners[3].east,
+						north: corners[3].north,
+					};
+					endPoint = {
+						east: corners[2].east,
+						north: corners[2].north,
+					};
+					break;
+
+				case "left":
+					lado = "izquierda";
+					startPoint = {
+						east: corners[0].east,
+						north: corners[0].north,
+					};
+					endPoint = {
+						east: corners[3].east,
+						north: corners[3].north,
+					};
+					break;
+
+				case "right":
+					lado = "derecha";
+					startPoint = {
+						east: corners[1].east,
+						north: corners[1].north,
+					};
+					endPoint = {
+						east: corners[2].east,
+						north: corners[2].north,
+					};
+					break;
+
+				default:
+					return null;
+			}
+
+			return {
+				startPoint,
+				endPoint,
+				lado,
+				tipo,
+				nombre: elemento.nombre || `${tipo} ${index}`,
+				doorSide,
+			};
+		};
+
+		// ✅ FUNCIÓN PARA CREAR VEREDA DE PABELLÓN (solo aulas)
+		const calcularVeredaPabellon = (aulas, tipo) => {
+			if (!aulas || aulas.length === 0) return null;
+
+			const primeraAula = aulas[0];
+			const ultimaAula = aulas[aulas.length - 1];
+
+			const corners = primeraAula.realCorners;
+			const centerX =
+				corners.reduce((sum, c) => sum + c.east, 0) / corners.length;
+			const centerY =
+				corners.reduce((sum, c) => sum + c.north, 0) / corners.length;
+			const angle = Math.atan2(
+				corners[1].north - corners[0].north,
+				corners[1].east - corners[0].east
+			);
+
+			const doorSide = calcularLadoVereda(
+				corners,
+				centerX,
+				centerY,
+				angle
+			);
+
+			let startPoint, endPoint, lado;
+
+			switch (doorSide) {
+				case "front":
+					lado = "inferior";
+					startPoint = {
+						east: primeraAula.realCorners[0].east,
+						north: primeraAula.realCorners[0].north,
+					};
+					endPoint = {
+						east: ultimaAula.realCorners[1].east,
+						north: ultimaAula.realCorners[1].north,
+					};
+					break;
+
+				case "back":
+					lado = "superior";
+					startPoint = {
+						east: primeraAula.realCorners[3].east,
+						north: primeraAula.realCorners[3].north,
+					};
+					endPoint = {
+						east: ultimaAula.realCorners[2].east,
+						north: ultimaAula.realCorners[2].north,
+					};
+					break;
+
+				case "left":
+					lado = "izquierda";
+					startPoint = {
+						east: primeraAula.realCorners[0].east,
+						north: primeraAula.realCorners[0].north,
+					};
+					endPoint = {
+						east: ultimaAula.realCorners[3].east,
+						north: ultimaAula.realCorners[3].north,
+					};
+					break;
+
+				case "right":
+					lado = "derecha";
+					startPoint = {
+						east: primeraAula.realCorners[1].east,
+						north: primeraAula.realCorners[1].north,
+					};
+					endPoint = {
+						east: ultimaAula.realCorners[2].east,
+						north: ultimaAula.realCorners[2].north,
+					};
+					break;
+
+				default:
+					return null;
+			}
+
+			return {
+				startPoint,
+				endPoint,
+				lado,
+				tipo,
+				doorSide,
+			};
+		};
+
+		// ✅ VEREDAS PARA AULAS DE CADA PABELLÓN
+		if (piso1.inicial && piso1.inicial.length > 0) {
+			const vereda = calcularVeredaPabellon(piso1.inicial, "inicial");
+			if (vereda) {
+				veredasCalculadas.push(vereda);
+				console.log(
+					`🚶 Vereda INICIAL (aulas): ${piso1.inicial.length} aulas`
+				);
+			}
+		}
+
+		if (piso1.primaria && piso1.primaria.length > 0) {
+			const vereda = calcularVeredaPabellon(piso1.primaria, "primaria");
+			if (vereda) {
+				veredasCalculadas.push(vereda);
+				console.log(
+					`🚶 Vereda PRIMARIA (aulas): ${piso1.primaria.length} aulas`
+				);
+			}
+		}
+
+		if (piso1.secundaria && piso1.secundaria.length > 0) {
+			const vereda = calcularVeredaPabellon(
+				piso1.secundaria,
+				"secundaria"
+			);
+			if (vereda) {
+				veredasCalculadas.push(vereda);
+				console.log(
+					`🚶 Vereda SECUNDARIA (aulas): ${piso1.secundaria.length} aulas`
+				);
+			}
+		}
+
+		// ✅ VEREDAS INDIVIDUALES PARA AMBIENTES COMPLEMENTARIOS
+		piso1.ambientes?.forEach((ambiente, idx) => {
+			const vereda = crearVeredaElemento(ambiente, "ambiente", idx);
+			if (vereda) {
+				veredasCalculadas.push(vereda);
+				console.log(
+					`🚶 Vereda AMBIENTE: ${
+						ambiente.nombre || `Ambiente ${idx}`
+					}`
+				);
+			}
+		});
+
+		// ✅ VEREDAS INDIVIDUALES PARA LATERALES
+		piso1.laterales?.forEach((lateral, idx) => {
+			const vereda = crearVeredaElemento(lateral, "lateral", idx);
+			if (vereda) {
+				veredasCalculadas.push(vereda);
+				console.log(
+					`🚶 Vereda LATERAL: ${lateral.nombre || `Lateral ${idx}`}`
+				);
+			}
+		});
+
+		// ✅ VEREDA PARA ENTRADA
+		if (elementos.entrada?.realCorners) {
+			const vereda = crearVeredaElemento(elementos.entrada, "entrada", 0);
+			if (vereda) {
+				veredasCalculadas.push(vereda);
+				console.log(`🚶 Vereda ENTRADA`);
+			}
+		}
+
+		console.log(`🚶 Total veredas: ${veredasCalculadas.length}`);
+		return veredasCalculadas;
+	}, [distributeByFloor, collegeCenter, elementos]);
+	// ✅ CALCULAR VEREDAS PARA CADA PABELLÓN (solo piso 1)
 	// ✅ CALCULAR CORREDORES MEJORADO
 	const calcularCorredores = useMemo(() => {
 		if (!distributeByFloor || totalFloors <= 1) return {};
@@ -2961,7 +3672,7 @@ const EdificioMultiPiso = ({
 
 					const offsetZ = (floor - 1) * ALTURA_PISO;
 					const floorElements = distributeByFloor[floor];
-
+					console.log("floorambientes:::::", floorElements);
 					if (!floorElements) return null;
 
 					return (
@@ -2971,20 +3682,6 @@ const EdificioMultiPiso = ({
 						>
 							{/* AULAS INICIAL */}
 							{floorElements.inicial.map((aula, idx) => (
-								// <AulaDetallada
-								// 	key={`inicial-${floor}-${idx}`}
-								// 	corners={aula.realCorners}
-								// 	height={ALTURA_PISO}
-								// 	color="#eab308"
-								// 	nombre={`Inicial ${idx + 1}${
-								// 		totalFloors > 1 ? ` - P${floor}` : ""
-								// 	}`}
-								// 	level="inicial"
-								// 	collegeCenter={collegeCenter}
-								// 	onClick={() =>
-								// 		onElementClick?.(aula, "inicial")
-								// 	}
-								// />
 								<AulaDetallada
 									key={`inicial-${floor}-${idx}`}
 									corners={aula.realCorners}
@@ -3011,21 +3708,47 @@ const EdificioMultiPiso = ({
 							))}
 
 							{/* AULAS PRIMARIA */}
-							{floorElements.primaria.map((aula, idx) => (
-								// <AulaDetallada
-								// 	key={`primaria-${floor}-${idx}`}
-								// 	corners={aula.realCorners}
-								// 	height={ALTURA_PISO}
-								// 	color="#3b82f6"
-								// 	nombre={`Primaria ${idx + 1}${
-								// 		totalFloors > 1 ? ` - P${floor}` : ""
-								// 	}`}
-								// 	level="primaria"
-								// 	collegeCenter={collegeCenter}
-								// 	onClick={() =>
-								// 		onElementClick?.(aula, "primaria")
-								// 	}
-								// />
+							{floorElements.primaria.map((aula, idx) => {
+								const aulaId = `primaria-${floor}-${idx}`;
+								const tieneTechoPlano =
+									aulasConTechoPlano.has(aulaId);
+								console.log(
+									"aulastechosplanos",
+									tieneTechoPlano
+								);
+								return (
+									<AulaDetallada
+										key={aulaId}
+										corners={aula.realCorners}
+										height={ALTURA_PISO}
+										color="#3b82f6"
+										nombre={`Primaria ${idx + 1}${
+											totalFloors > 1
+												? ` - P${floor}`
+												: ""
+										}`}
+										level="primaria"
+										collegeCenter={collegeCenter}
+										onClick={() =>
+											onElementClick?.(aula, "primaria")
+										}
+										isTopFloor={
+											!tieneTechoPlano &&
+											floor === totalFloors
+										} // ✅ MODIFICADO
+										hasFlatRoof={tieneTechoPlano} // ✅ NUEVO PROP
+										corridorSide={
+											floor >= 2
+												? distribution?.layoutMode ===
+												  "horizontal"
+													? "right"
+													: "top"
+												: null
+										}
+									/>
+								);
+							})}
+							{/* {floorElements.primaria.map((aula, idx) => (
 								<AulaDetallada
 									key={`primaria-${floor}-${idx}`}
 									corners={aula.realCorners}
@@ -3049,48 +3772,46 @@ const EdificioMultiPiso = ({
 											: null
 									} // ✅ NUEVO
 								/>
-							))}
+							))} */}
 
 							{/* AULAS SECUNDARIA */}
-							{floorElements.secundaria.map((aula, idx) => (
-								// <AulaDetallada
-								// 	key={`secundaria-${floor}-${idx}`}
-								// 	corners={aula.realCorners}
-								// 	height={ALTURA_PISO}
-								// 	color="#ef4444"
-								// 	nombre={`Secundaria ${idx + 1}${
-								// 		totalFloors > 1 ? ` - P${floor}` : ""
-								// 	}`}
-								// 	level="secundaria"
-								// 	collegeCenter={collegeCenter}
-								// 	onClick={() =>
-								// 		onElementClick?.(aula, "secundaria")
-								// 	}
-								// />
-								<AulaDetallada
-									key={`secundaria-${floor}-${idx}`}
-									corners={aula.realCorners}
-									height={ALTURA_PISO}
-									color="#ef4444"
-									nombre={`Secundaria ${idx + 1}${
-										totalFloors > 1 ? ` - P${floor}` : ""
-									}`}
-									level="secundaria"
-									collegeCenter={collegeCenter}
-									onClick={() =>
-										onElementClick?.(aula, "secundaria")
-									}
-									isTopFloor={floor === totalFloors} // ✅ NUEVO
-									corridorSide={
-										floor >= 2
-											? distribution?.layoutMode ===
-											  "horizontal"
-												? "right"
-												: "top"
-											: null
-									} // ✅ NUEVO
-								/>
-							))}
+							{floorElements.secundaria.map((aula, idx) => {
+								const aulaId = `secundaria-${floor}-${idx}`;
+								const tieneTechoPlano =
+									aulasConTechoPlano.has(aulaId);
+								return (
+									<AulaDetallada
+										key={`secundaria-${floor}-${idx}`}
+										corners={aula.realCorners}
+										height={ALTURA_PISO}
+										color="#ef4444"
+										nombre={`Secundaria ${idx + 1}${
+											totalFloors > 1
+												? ` - P${floor}`
+												: ""
+										}`}
+										level="secundaria"
+										collegeCenter={collegeCenter}
+										onClick={() =>
+											onElementClick?.(aula, "secundaria")
+										}
+										//isTopFloor={floor === totalFloors} // ✅ NUEVO
+										isTopFloor={
+											!tieneTechoPlano &&
+											floor === totalFloors
+										} // ✅ MODIFICADO
+										hasFlatRoof={tieneTechoPlano}
+										corridorSide={
+											floor >= 2
+												? distribution?.layoutMode ===
+												  "horizontal"
+													? "right"
+													: "top"
+												: null
+										} // ✅ NUEVO
+									/>
+								);
+							})}
 
 							{/* BAÑOS */}
 							{floorElements.banos.map((bano, idx) => (
@@ -3109,7 +3830,78 @@ const EdificioMultiPiso = ({
 							))}
 
 							{/* AMBIENTES */}
-							{floorElements.ambientes.map((ambiente, idx) => (
+							{floorElements.ambientes.map((ambiente, idx) => {
+								// ✅ CALCULAR DIMENSIONES REALES DEL AMBIENTE
+								const corners = ambiente.realCorners;
+								const ambienteWidth = Math.sqrt(
+									Math.pow(
+										corners[1].east - corners[0].east,
+										2
+									) +
+										Math.pow(
+											corners[1].north - corners[0].north,
+											2
+										)
+								);
+								const ambienteDepth = Math.sqrt(
+									Math.pow(
+										corners[2].east - corners[1].east,
+										2
+									) +
+										Math.pow(
+											corners[2].north - corners[1].north,
+											2
+										)
+								);
+
+								// ✅ LOG PARA DEBUG
+								console.log(`🏠 Ambiente ${idx}:`, {
+									nombre: ambiente.nombre,
+									width: ambienteWidth.toFixed(2),
+									depth: ambienteDepth.toFixed(2),
+									corners: corners.map(
+										(c) =>
+											`(${c.east.toFixed(
+												1
+											)}, ${c.north.toFixed(1)})`
+									),
+								});
+
+								return (
+									<AulaDetallada
+										key={`ambiente-${floor}-${idx}`}
+										corners={ambiente.realCorners}
+										height={ALTURA_PISO}
+										color="#ec4899"
+										nombre={`${
+											ambiente.nombre || "Ambiente"
+										}${
+											totalFloors > 1
+												? ` - P${floor}`
+												: ""
+										}`}
+										level="ambiente"
+										collegeCenter={collegeCenter}
+										onClick={() =>
+											onElementClick?.(
+												ambiente,
+												"ambiente"
+											)
+										}
+										isTopFloor={floor === totalFloors}
+										corridorSide={null}
+										// ✅ PASAR DIMENSIONES EXPLÍCITAS CON VOLADIZO
+										customRoofWidth={ambienteWidth + 1.2} // +1.2m de voladizo
+										customRoofDepth={ambienteDepth + 2.5} // +1.2m de voladizo
+										// Ajusta posición y rotación según necesites
+										customRoofPosition={[0, 6, ALTURA_PISO]}
+										customRoofRotation={[Math.PI / 2, 0, 0]}
+										customRoofOrientation="horizontal" // O "vertical"
+									/>
+								);
+							})}
+
+							{/* {floorElements.ambientes.map((ambiente, idx) => (
 								<AulaDetallada
 									key={`ambiente-${floor}-${idx}`}
 									corners={ambiente.realCorners}
@@ -3123,8 +3915,14 @@ const EdificioMultiPiso = ({
 									onClick={() =>
 										onElementClick?.(ambiente, "ambiente")
 									}
+									isTopFloor={floor === totalFloors}
+									corridorSide={null}
+									// ✅ CONTROLES MANUALES DEL TECHO (ajusta estos valores)
+									customRoofPosition={[0, 5, ALTURA_PISO]} // Ejemplo: [x, y, z]
+									customRoofRotation={[Math.PI / 2, 0, 0]} // Ejemplo: rotar 45°
+									customRoofOrientation="horizontal" // O "vertical"
 								/>
-							))}
+							))} */}
 
 							{/* LATERALES */}
 							{floorElements.laterales.map((lateral, idx) => (
@@ -3141,8 +3939,32 @@ const EdificioMultiPiso = ({
 									onClick={() =>
 										onElementClick?.(lateral, "lateral")
 									}
+									isTopFloor={floor === totalFloors}
+									corridorSide={null}
+									// ✅ CONTROLES MANUALES DEL TECHO (ajusta estos valores)
+									customRoofPosition={[0, 4, ALTURA_PISO]} // Ejemplo: [x, y, z]
+									customRoofRotation={[Math.PI / 2, 0, 0]} // Ejemplo: sin rotación adicional
+									customRoofOrientation="vertical" // O "horizontal"
 								/>
 							))}
+							{/* {floorElements.laterales.map((lateral, idx) => (
+								<AulaDetallada
+									key={`lateral-${floor}-${idx}`}
+									corners={lateral.realCorners}
+									height={ALTURA_PISO}
+									color="#fb923c"
+									nombre={`${lateral.nombre || "Lateral"}${
+										totalFloors > 1 ? ` - P${floor}` : ""
+									}`}
+									level="lateral"
+									collegeCenter={collegeCenter}
+									onClick={() =>
+										onElementClick?.(lateral, "lateral")
+									}
+									isTopFloor={floor === totalFloors} // ✅ AGREGADO
+									corridorSide={null}
+								/>
+							))} */}
 
 							{/* ✅ CORREDORES (solo piso 2+) */}
 							{floor >= 2 && calcularCorredores[floor] && (
@@ -3210,7 +4032,7 @@ const EdificioMultiPiso = ({
 							)}
 
 							{/* ENTRADA (solo piso 1) */}
-							{floor === 1 && elementos.entrada && (
+							{/* {floor === 1 && elementos.entrada && (
 								<AulaDetallada
 									corners={elementos.entrada.realCorners}
 									height={ALTURA_PISO}
@@ -3225,12 +4047,55 @@ const EdificioMultiPiso = ({
 										)
 									}
 								/>
+							)} */}
+							{floor === 1 && elementos.entrada && (
+								<EntradaGate
+									corners={elementos.entrada.realCorners}
+									scale={1.5} // ✅ Ajusta este valor según necesites
+									rotation={[
+										Math.PI / 2,
+										Math.PI / 3,
+										Math.PI / 1.5,
+									]} // ✅ Ajusta la rotación
+								/>
 							)}
 						</group>
 					);
 				}
 			)}
 
+			{/* ✅ VEREDAS (solo piso 1) */}
+			{veredas.map((vereda, idx) => {
+				console.log(`Renderizando vereda ${vereda.tipo}:`, {
+					lado: vereda.lado,
+					doorSide: vereda.doorSide,
+					start: vereda.startPoint,
+					end: vereda.endPoint,
+				});
+
+				return (
+					<Vereda3D
+						key={`vereda-${vereda.tipo}-${idx}`}
+						startPoint={vereda.startPoint}
+						endPoint={vereda.endPoint}
+						width={ANCHO_VEREDA}
+						lado={vereda.lado}
+						color="#cccccc"
+						offset={OFFSET_VEREDA}
+					/>
+				);
+			})}
+			{/* {veredas.map((vereda, idx) => (
+				<Vereda3D
+					key={`vereda-${vereda.tipo}-${idx}`}
+					startPoint={vereda.startPoint}
+					endPoint={vereda.endPoint}
+					width={ANCHO_VEREDA} // ✅ Configurable aquí
+					lado={vereda.lado}
+					color="#cccccc" // Color gris cemento
+					offset={OFFSET_VEREDA}
+				/>
+			))} */}
 			{/* ESCALERAS (atraviesan todos los pisos) */}
 			{elementos.escaleras?.map((escalera, idx) => (
 				<EscaleraDetallada

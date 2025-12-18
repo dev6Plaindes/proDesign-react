@@ -65,7 +65,7 @@ export default function Plan3D({ state, view, school, aspect }) {
 	) : (
 		//<FloorPlanX school={school} view={view} />
 		//<AppTest />
-		<TerrainPlanner school={school} />
+		<TerrainPlanner school={school} state={state} />
 	);
 }
 function Aula({ position, name }) {

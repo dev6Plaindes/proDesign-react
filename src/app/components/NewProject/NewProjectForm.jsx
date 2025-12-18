@@ -2,8 +2,7 @@ import { useState, useEffect, forwardRef, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { Formik, Form, Field, useField } from "formik";
-// import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-// import SquareFootIcon from "@mui/icons-material/SquareFoot";
+
 import {
 	Chart,
 	ScatterController,
@@ -28,11 +27,11 @@ import LinearProgress from "@mui/material/LinearProgress";
 import Grid from "@mui/material/Grid";
 import Typography from "@mui/material/Typography";
 import Modal from "@mui/material/Modal";
-import Input from "@mui/material/Input";
+
 import Radio from "@mui/material/Radio";
 import RadioGroup from "@mui/material/RadioGroup";
 import { UpperLowerCase } from "../../../utils/utils";
-import { RowForm } from "./RowForm";
+
 import * as yup from "yup";
 import { RowFormAC } from "./RowFormAC";
 import { request } from "../../../utils/arqPlataformAxios";
@@ -40,36 +39,29 @@ import {
 	readMatrizExcel,
 	updateProjectExcelService,
 } from "../../../services/spreadsheetService";
-import HighlightOffIcon from "@mui/icons-material/HighlightOff";
+
 import {
 	createProjectService,
 	updateProjectService,
 } from "../../../services/projectsService";
 import { addProject, setProjects } from "../../../redux/projects/projectSlice";
 import { createThumbnail } from "./createThumbnail";
-import Preview3D from "../../Builder/Plan3D/Preview3D";
+
 import * as XLSX from "xlsx";
 import TerrainDataTable from "./TerrainDataTable";
-import BestTerrain from "../GridData/BestTerrain";
 
 import MaxRectangle from "../GridData/MaxRectangle";
 import {
 	Dialog,
 	DialogContent,
 	DialogTitle,
-	FormControl,
-	InputLabel,
-	MenuItem,
-	TextField,
-	Select,
 	Stack,
 	Card,
 	CardContent,
 	Paper,
 	Chip,
 } from "@mui/material";
-import AreaMaxRectangle from "../AreaData/AreaMaxRectangle";
-import MaxRectangleWithPriority from "../GridData/MaxRectangleWithPriority";
+
 import { mapFormDataToExcel } from "../../../utils/excelMapping";
 import { setAmbienceData } from "../../../redux/distribution/ambienceSlice";
 import { height, width } from "@mui/system";
@@ -1239,79 +1231,6 @@ const NewProjectForm = forwardRef(
 											</>
 										)}
 
-										{/* <Grid item xs={12} my="1rem">
-											<Grid container rowSpacing={3}>
-												<Grid item xs={12}>
-													<Select
-														style={{
-															...styleInput,
-															marginTop: ".5rem",
-														}}
-														onChange={(e) =>
-															handleOnAddAC(
-																e.target.value
-															)
-														}
-														label="Ambientes Complementarios"
-														name="ambientes complementarios"
-													>
-														<option value="">
-															Seleccione
-														</option>
-														{ambientesComplementarios?.map(
-															(ambiente) => (
-																<option
-																	key={
-																		ambiente.ambienteComplementario
-																	}
-																	value={
-																		ambiente.ambienteComplementario
-																	}
-																>
-																	{UpperLowerCase(
-																		ambiente.ambienteComplementario
-																	)}
-																</option>
-															)
-														)}
-													</Select>
-												</Grid>
-												<Grid item xs={6}>
-													<span>
-														{!!rowsAC.length &&
-															"AMBIENTES COMPLEMENTARIOS"}
-													</span>
-												</Grid>
-												<Grid item xs={6}>
-													<span>
-														{!!rowsAC.length &&
-															"AFORO MAXIMO"}
-													</span>
-												</Grid>
-												{rowsAC.map((row, index) => (
-													<RowFormAC
-														{...row}
-														onChange={(
-															name,
-															value
-														) =>
-															handleOnChangeAC(
-																index,
-																name,
-																value
-															)
-														}
-														onRemove={() =>
-															handleOnRemoveAC(
-																index
-															)
-														}
-														key={index}
-														disabledDeleted={index}
-													/>
-												))}
-											</Grid>
-										</Grid> */}
 										<Grid item xs={12} my="1rem">
 											<Grid container rowSpacing={3}>
 												<Grid item xs={12}>
@@ -1494,37 +1413,6 @@ const NewProjectForm = forwardRef(
 						}}
 					</Formik>
 				)}
-				{/* {step === 2 && (
-					<>
-						<div style={{ padding: "3rem 5rem" }}>
-							<div style={{ minWidth: 300 }}>
-								<img
-									src={`/images/${imageToAulas(
-										aforoInicial,
-										aforoPrimaria,
-										aforoSecundaria
-									)}`}
-									alt="img"
-									style={{ width: "100%" }}
-								/>
-							</div>
-						</div>
-						<div
-							style={{
-								width: "450px",
-								height: "300px",
-								position: "absolute",
-								visibility: "hidden",
-							}}
-						>
-							<Preview3D
-								school={school}
-								state={createdProject}
-								isNew
-							/>
-						</div>
-					</>
-				)} */}
 			</>
 		);
 	}
@@ -2414,9 +2302,16 @@ const RectangleChart = ({
 	);
 
 	const handleConfirm = () => {
-		const { vertices, anguloGrados, alto, ancho, area } =
+		const { vertices, anguloGrados, alto, ancho, area, perimetro } =
 			rectangulosData[selectedOption];
-		setMaximumRectangle({ vertices, anguloGrados, alto, ancho, area });
+		setMaximumRectangle({
+			vertices,
+			anguloGrados,
+			alto,
+			ancho,
+			area,
+			perimetro,
+		});
 		close();
 	};
 

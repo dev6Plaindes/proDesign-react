@@ -1,738 +1,1021 @@
-// import { useState } from 'react';
-// import { useSelector, useDispatch } from "react-redux";
-// import { Formik, Form, Field, useField } from 'formik';
-// import Button from '@mui/material/Button';
-// // import Box from '@mui/system/Box';
-// // import Fade from '@mui/material/Fade';
-// // import Card from "@mui/material/Card";
-// // import Checkbox from "@mui/material/Checkbox";
-// import CircularProgress from '@mui/material/CircularProgress';
-// import CancelIcon from "@mui/icons-material/Cancel";
-// import Container from "@mui/material/Container";
-// import Grid from "@mui/material/Grid";
-// // import FormControlLabel from "@mui/material/FormControlLabel";
-// // import Modal from "@mui/material/Modal";
-// // import Input from "@mui/material/Input";
-// // import Radio from "@mui/material/Radio";
-// // import RadioGroup from "@mui/material/RadioGroup";
-// import * as yup from 'yup';
-// import { setShowSettings } from '../../../../redux/building/buildingSlice';
-// // import { RowForm } from './RowForm';
-// import "./styles.css";
-// // import { RowFormAC } from './RowFormAC';
-
-
-// // togle buttons imports
-import ToggleButton from '@mui/material/ToggleButton';
-import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
-import WindowOutlinedIcon from '@mui/icons-material/WindowOutlined';
-import ThreeDRotationOutlinedIcon from '@mui/icons-material/ThreeDRotationOutlined';
-import SensorDoorOutlinedIcon from '@mui/icons-material/SensorDoorOutlined';
-import { toggleDoor, toggleRailing, toggleWindow } from '../../../../redux/projects/projectSlice';
-
-// export default function Settings({ data }) {
-// 	const show = useSelector(state => state.building.showSettings);
-// 	const dispatch = useDispatch();
-
-// 	const [rows, setRows] = useState(data?.puntos ? JSON.parse(data?.puntos) : [{ ...defaultState, vertice: "P1" }].concat({ ...defaultState, vertice: "P2" }).concat({ ...defaultState, vertice: "P3" }));
-// 	const [rowsAC, setRowsAC] = useState(data?.ambientes ? JSON.parse(data?.ambientes) : []);
-// 	const [tipo, setTipo] = useState(data?.sublevel || "unidocente");
-// 	const [zone, setZone] = useState();
-// 	const [coordenadas, setCoordenadas] = useState(data?.coordenadas || "");
-
-// 	const handleSubmit = () => {
-
-// 	}
-
-// 	const handleChange = (event) => {
-// 		setTipo((event.target.value))
-// 	}
-
-// 	const handleOnChange = (index, name, value) => {
-// 		const copyRows = [...rows];
-// 		copyRows[index] = {
-// 		   ...copyRows[index],
-// 		   [name]: value
-// 		}
-// 		setRows(copyRows);
-// 	}
-  
-// 	const handleOnChangeAC = (index, name, value) => {
-// 		const copyRowsAC = [...rowsAC];
-// 		copyRowsAC[index] = {
-// 		   ...copyRowsAC[index],
-// 		   [name]: value
-// 		}
-// 		setRowsAC(copyRowsAC);
-// 	}
-  
-// 	const handleOnAdd = () => {
-// 		var ultimo = rows.length;
-// 		if (rows[ultimo - 1].lado === "P" + ultimo + " - P" + (ultimo + 1)) {
-// 		   setRows([...rows, { ...defaultState, lado: `P${ultimo + 1} - P${ultimo + 2}`, vertice: `P${ultimo + 1}`, }]);
-// 		}
-// 	}
-  
-// 	const handleOnAddAC = (ambiente) => {
-// 		const verificador = rowsAC.find((item) => item.ambienteComplementario === ambiente);
-// 		if (!verificador && ambiente !== "") {
-// 			setRowsAC([...rowsAC, { capacidad: 0, ambienteComplementario: ambiente }]);
-// 		}
-// 	}
-	
-// 	if (show) {
-// 		return (
-// 			<Container style={{ position: "absolute", zIndex: 9999, backgroundColor: "#ffff", width: "30vw", minHeight: "100%" }}>
-// 				<div style={{display: "flex", justifyContent: "space-between", padding: "1rem 0"}}>
-// 					<h2>Ajustes</h2>
-// 					<CancelIcon onClick={() => dispatch(setShowSettings({ showSettings: false }))} className="pointer" />
-// 				</div>
-// 				<Formik
-// 					// initialValues={initialValues}
-// 					onSubmit={handleSubmit}
-// 					validationSchema={validationSchema}
-// 				>
-// 				{({ errors, touched }) => (
-// 					<Form>
-// 						{/* <Grid item xs={12} sm={12} lg={5}> */}
-// 							<Grid container spacing={1.5}>
-// 								<Grid item xs={12} sx={{ display: "flex", justifyContent: "center" }}>
-// 									<ToggleButtonsMultiple />
-// 								</Grid>
-// 								<Grid item xs={12}>
-// 									<span>NOMBRE:</span><br />
-// 									<Field style={styleInput} type="text" name="name" disabled placeholder={`${data?.name ? data.name : "Ingrese nombre del proyecto"}`} />
-// 									{errors.name && touched.name ? (
-// 										<div style={styleError}>{errors.name}</div>
-// 									) : null}
-// 									{/* <ErrorMessage name="email" component="div" /> */}
-// 								</Grid>
-
-// 								<Grid item xs={12}>
-// 									<span>TIPOLOGIA</span> <br />
-// 									<Field style={{ ...styleInput, marginTop: ".5rem" }} disabled type="text" name="tipologia" />
-// 									{errors.tipologia && touched.tipologia ? (
-// 										<div style={styleError}>{errors.tipologia}</div>
-// 									) : null}
-// 								</Grid>
-
-// 								<Grid item xs={12}>
-// 									<div>
-// 										<label htmlFor="zone" style={styleInput}>ZONA</label>
-// 										<select id="zone" disabled>
-// 											<option value="">Seleccione una zona</option>
-// 											<option value="urbano">Urbano</option>
-// 											<option value="rural">Rural</option>
-// 										</select>
-// 									</div>
-// 								</Grid>
-
-// 								<Grid item xs={6}>
-// 									<span>AFORO MAXIMO</span> <br />
-// 									<Field style={{ ...styleInput, marginTop: ".5rem" }} disabled type="text" name="aforo_maximo" />
-// 									{/* {errors.tipologia && touched.tipologia ? (
-// 										<div style={styleError}>{errors.tipologia}</div>
-// 									) : null} */}
-// 								</Grid>
-
-// 								<Grid item xs={6}>
-// 									<span>CANTIDAD DE AULAS</span> <br />
-// 									<Field style={{ ...styleInput, marginTop: ".5rem" }} disabled type="text" name="cantidad_de_aulas" />
-// 									{/* {errors.tipologia && touched.tipologia ? (
-// 										<div style={styleError}>{errors.tipologia}</div>
-// 									) : null} */}
-// 								</Grid>
-
-// 								<Grid item xs={12}>
-// 									<span>PROVINCIA:</span> <br />
-// 									<Field style={styleInput} type="text" disabled name="ubication" />
-// 									{errors.ubication && touched.ubication ? (
-// 										<div style={styleError}>{errors.ubication}</div>
-// 									) : null}
-// 									{/* <ErrorMessage name="email" component="div" /> */}
-// 								</Grid>
-
-// 								<Grid item xs={12}>
-// 									<span>DISTRITO:</span> <br />
-// 									<Field style={styleInput} type="text" disabled name="distrito" />
-// 									{errors.distrito && touched.distrito ? (
-// 										<div style={styleError}>{errors.distrito}</div>
-// 									) : null}
-
-// 									{/* <ErrorMessage name="email" component="div" /> */}
-// 								</Grid>
-
-// 								<Grid item xs={6}>
-// 									<span>RESPONSABLE:</span> <br />
-// 									<Field style={styleInput} type="text" disabled name="manager" />
-// 									{errors.manager && touched.manager ? (
-// 										<div style={styleError}>{errors.manager}</div>
-// 									) : null}
-// 									{/* <ErrorMessage name="email" component="div" /> */}
-// 								</Grid>
-
-// 								<Grid item xs={6}>
-// 									<span>CLIENTE:</span> <br />
-// 									<Field style={styleInput} type="text" disabled name="client" />
-// 									{errors.client && touched.client ? (
-// 										<div style={styleError}>{errors.client}</div>
-// 									) : null}
-
-// 									{/* <ErrorMessage name="email" component="div" /> */}
-// 								</Grid>
-
-// 								<Grid item xs={12}>
-// 									{/* <span>NIVEL:</span>
-// 									<br />
-
-// 									<Grid container spacing={2} > */}
-
-// 										{/* <Grid item xs={5}>
-// 										<div role="group" aria-labelledby="my-radio-group" style={{ display: "flex", flexDirection: "column", marginBottom: "10px" }}>
-// 											<label>
-// 												<Checkbox checked={inicial} onClick={() => setInicial(!inicial)} />
-// 												Inicial
-// 											</label>
-// 											<label>
-// 												<Checkbox checked={primaria} onClick={() => setPrimaria(!primaria)} />
-// 												Primaria
-// 											</label>
-// 											<label>
-// 												<Checkbox checked={secundaria} onClick={() => setSecundaria(!secundaria)} />
-// 												Secundaria
-// 											</label>
-// 										</div>
-// 										</Grid> */}
-
-// 										{/* <Grid item xs={7}>
-// 											<RadioGroup
-// 												aria-labelledby="demo-radio-buttons-group-label"
-// 												defaultValue="female"
-// 												name="radio-buttons-group"
-// 												// name="tipo"
-// 												onChange={handleChange}
-// 												value={tipo}
-// 											>
-// 												<FormControlLabel value="unidocente" control={<Radio />} label="UNIDOCENTE" />
-// 												<FormControlLabel value="polidocente multigrado" control={<Radio />} label="POLIDOCENTE MULTIGRADO" />
-// 												<FormControlLabel value="polidocente completo" control={<Radio />} label="POLIDOCENTE COMPLETO" />
-// 											</RadioGroup>
-// 										</Grid> */}
-
-// 										{/* Input for lat and lng */}
-
-// 									{/* </Grid> */}
-
-// 									{/* {(inicial || primaria || secundaria) && (
-// 										<Grid container>
-// 										<Grid item xs={4} textAlign="center" >
-// 											<span>GRADO</span>
-// 										</Grid>
-// 										<Grid item xs={4} textAlign="center">
-// 											<span>AFORO POR GRADO</span>
-// 										</Grid>
-// 										<Grid item xs={4} textAlign="center">
-// 											<span>CANTIDAD DE AULAS</span>
-// 										</Grid>
-// 										</Grid>
-// 									)}
-
-// 									{inicial && (nivelGrid("INICIAL", aforoInicial, aulaInicial))}
-// 									{(primaria) > 0 && (nivelGrid("PRIMARIA", aforoPrimaria, aulaPrimaria))}
-// 									{(secundaria) > 0 && (nivelGrid("SECUNDARIA", aforoSecundaria, aulaSecundaria))} */}
-
-
-
-// 									{/* <Button variant="contained" color="primary" onClick={handleOpen}>
-// 										Excel
-// 									</Button>
-// 									<Modal
-// 										aria-labelledby="transition-modal-title"
-// 										aria-describedby="transition-modal-description"
-// 										open={open}
-// 										onClose={handleClose}
-// 										closeAfterTransition
-// 									>
-// 										<Fade in={open}>
-// 										<Box sx={styleModal}>
-
-
-// 											<Grid container spacing={2} >
-// 												<Grid item xs={12} lg={4}>
-// 													<h2>Adjuntar archivo:</h2>
-// 												</Grid>
-// 												<Grid item xs={12} lg={8}>
-// 													<Input type='file' accept='.xlsx, .xls' onChange={(e) => onImportExcel(e)} sx={{ display: "none" }} id="button_file" />
-// 													<label htmlFor="button_file">
-// 													<Button variant="outlined" component="span" style={{ width: "200px" }}>
-// 														Subir
-// 													</Button>
-// 													</label>
-// 												</Grid>
-// 												<Grid item xs={12} lg={8} >
-// 													<a href="/descargas/template_project.xlsx" download="Plantilla del Proyecto.xlsx">
-// 													<Button variant="contained" color="primary" style={{ width: "200px" }}>
-// 														Descargar Plantilla
-// 													</Button>
-// 													</a>
-// 												</Grid>
-
-// 												<Grid item xs={12} lg={4} >
-// 													<Button variant="outlined" color="primary" style={{ width: "100px" }} >
-// 													Cerrar
-// 													</Button>
-// 												</Grid>
-// 											</Grid>
-
-
-
-// 										</Box>
-// 										</Fade>
-// 									</Modal> */}
-
-// 									<Grid container spacing={1} sx={{ width: "100%", marginTop: "10px" }}>
-// 										<Grid item xs={2}>
-// 											<span>VÉRTICE</span>
-// 										</Grid>
-// 										<Grid item xs={2}>
-// 											<span>LADO</span>
-// 										</Grid>
-// 										<Grid item xs={2}>
-// 											<span>DIST.</span>
-// 										</Grid>
-// 										<Grid item xs={3}>
-// 											<span>ÁNGULO</span>
-// 										</Grid>
-// 										<Grid item xs={2}>
-// 											<span>RETIROS:</span>
-// 										</Grid>
-// 	{/* 
-// 										{rows.map((row, index) => (
-// 										<RowForm
-// 											{...row}
-// 											onChange={(name, value) => handleOnChange(index, name, value)}
-// 											onRemove={() => handleOnRemove(index)}
-// 											key={index}
-// 											disabledDeleted={index}
-// 											error={errors.rows && errors.rows[index]}
-// 										/>
-// 										))} */}
-// 										<Button sx={{ marginTop: "1rem" }} variant='outlined' onClick={handleOnAdd}>Agregar</Button>
-// 									</Grid>
-
-// 									{false ? (
-// 										<CircularProgress />
-// 									) : (
-// 										<Grid item xs={12} marginTop="1rem">
-// 										<Grid container spacing={1} sx={{ width: "100%" }}>
-// 											{/* <Box sx={{ width: "100%", height: "5px", backgroundColor: "#F3F6F9", marginTop: "1rem" }}></Box> */}
-
-
-// 											<Grid item xs={5} >
-// 												<span >{!!rowsAC.length && "AMBIENTES COMPLEMENTARIOS"}</span>
-// 											</Grid>
-// 											<Grid item xs={3}>
-// 												<span>{!!rowsAC.length && "AFORO MAXIMO"}</span>
-// 											</Grid>
-// 											{rowsAC.map((row, index) => (
-// 												<RowFormAC
-// 													{...row}
-// 													onChange={(name, value) => handleOnChangeAC(index, name, value)}
-// 													onRemove={() => handleOnRemoveAC(index)}
-// 													key={index}
-// 													disabledDeleted={index}
-// 												/>
-// 											))}
-// 											<Grid item xs={12}>
-// 												Seleccionar Ambientes complementarios
-// 												<select style={{ ...styleInput, marginTop: "1rem", marginBottom: "1rem" }} onChange={(e) => handleOnAddAC(e.target.value)}  >
-// 													<option value="">Seleccione</option>
-
-// 													{ambientesComplementarios?.map(ambiente => (
-// 													<option key={ambiente.ambienteComplementario} value={ambiente.ambienteComplementario}>{ambiente.ambienteComplementario}</option>
-// 													))}
-// 												</select>
-// 											</Grid>
-
-// 											{/* <Box sx={{ width: "100%", height: "5px", backgroundColor: "#F3F6F9", marginBottom: "1rem" }}></Box> */}
-
-// 										</Grid>
-// 										</Grid>
-// 									)}
-// 								</Grid>
-// 							</Grid>
-// 						{/* </Grid> */}
-// 						<Button variant="contained" type="submit" sx={{ marginTop: "2rem", marginBottom: "2rem" }}>
-// 							Guardar
-// 						</Button>
-// 					</Form>
-// 				)}
-// 				</Formik>
-// 		 </Container>
-// 		)
-// 	} else {
-// 		return null;
-// 	}
-// }
-
-// export const styleInput = {
-// 	width: "100%",
-// }
-//  const styleError = {
-// 	color: "red",
-// 	marginTop: "0.25rem",
-// }
-
-// const ambientesComplementarios = [
-// 	{ capacidad: 0, ambienteComplementario: "Aula" },
-// 	{ capacidad: 0, ambienteComplementario: "Laboratorio" },
-// 	{ capacidad: 0, ambienteComplementario: "Sala de Clases" },
-// 	{ capacidad: 0, ambienteComplementario: "Sala de Juntas" },
-// 	{ capacidad: 0, ambienteComplementario: "Sala de Reuniones" },
-// 	{ capacidad: 0, ambienteComplementario: "Sala de Trabajo" },
-// ]
-
-// const validationSchema = yup.object({
-// 	name: yup.string().required('El nombre es requerido'),
-// 	tipologia: yup.string().required('La tipologia es requerida'),
-// 	ubication: yup.string().required('La ubicacion es requerida'),
-// 	distrito: yup.string().required('El distrito es requerido'),
-// 	client: yup.string().required('El cliente es requerido'),
-// 	manager: yup.string().required('El responsable es requerido'),
-// 	zone: yup.string().required('La zona es requerida'),
-// 	parent_id: yup.number().required('El padre es requerido'),
-// 	capacity: yup.number().required('La capacidad es requerida'),
-// 	student: yup.number().required('La capacidad de estudiantes es requerida'),
-// 	room: yup.number().required('La capacidad de aulas es requerida'),
-// 	height: yup.number().required('La altura es requerida'),
-// 	width: yup.number().required('La anchura es requerida'),
-// 	// coordenadas: yup.string().required('Las coordenadas son requeridas'),
-// 	//array de objetos
-// 	rows: yup.array().of(
-// 	   yup.object().shape({
-// 		  vertice: yup.string().required('El vertice es requerido'),
-// 		  lado: yup.string().required('El lado es requerido'),
-// 		  distancia: yup.string().required('La distancia es requerida'),
-// 		  angulo: yup.string().required('El angulo es requerido'),
-// 		  retiros: yup.string().required('Los retiros son requeridos'),
-// 	   })
-// 	)
-// }).defined();
-
-// const defaultState = {
-// 	vertice: "",
-// 	lado: "",
-// 	dist: 0,
-// 	angulo: 0,
-// 	retiros: 0
-// }
-
-
-
-
-
-import { useState } from 'react';
-import { useDispatch } from 'react-redux';
+import { useState, useEffect } from "react";
+import { useDispatch } from "react-redux";
+import { useNavigate } from "react-router-dom";
 import styled from "@mui/material/styles/styled";
-import Box from '@mui/material/Box';
-import Drawer from '@mui/material/Drawer';
+import Box from "@mui/material/Box";
+import Drawer from "@mui/material/Drawer";
 import Divider from "@mui/material/Divider";
 import Tooltip from "@mui/material/Tooltip";
 import IconButton from "@mui/material/IconButton";
 import MuiButton from "@mui/material/Button";
+import Button from "@mui/material/Button";
 import SettingsIcon from "@mui/icons-material/Settings";
-import CloseOutlinedIcon from '@mui/icons-material/CloseOutlined';
+import CloseOutlinedIcon from "@mui/icons-material/CloseOutlined";
+import Grid from "@mui/material/Grid";
+import Typography from "@mui/material/Typography";
+import Modal from "@mui/material/Modal";
+import Fade from "@mui/material/Fade";
+import LinearProgress from "@mui/material/LinearProgress";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+
+import ToggleButton from "@mui/material/ToggleButton";
+import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
+import WindowOutlinedIcon from "@mui/icons-material/WindowOutlined";
+import ThreeDRotationOutlinedIcon from "@mui/icons-material/ThreeDRotationOutlined";
+import SensorDoorOutlinedIcon from "@mui/icons-material/SensorDoorOutlined";
+
+import {
+	toggleDoor,
+	toggleRailing,
+	toggleWindow,
+} from "../../../../redux/projects/projectSlice";
+import { addProject } from "../../../../redux/projects/projectSlice";
+import { createProjectService } from "../../../../services/projectsService";
+import {
+	readMatrizExcel,
+	updateProjectExcelService,
+} from "../../../../services/spreadsheetService";
+import { mapFormDataToExcel } from "../../../../utils/excelMapping";
+import { setAmbienceData } from "../../../../redux/distribution/ambienceSlice";
+
 import "./styles.css";
+import { RowFormAC } from "../../../components/NewProject/RowFormAC";
+import { createThumbnail } from "../../../components/NewProject/createThumbnail";
+import { UpperLowerCase } from "../../../../utils/utils";
 
-export default function Settings({ state, school, handleSetClassrooms }) {
+const styleModal = {
+	position: "absolute",
+	top: "50%",
+	left: "50%",
+	transform: "translate(-50%, -50%)",
+	bgcolor: "white",
+	borderRadius: "10px",
+	boxShadow: 24,
+	width: "400px",
+	p: 4,
+	"@media (max-width: 768px)": {
+		width: "auto",
+	},
+};
+
+// Ambientes complementarios disponibles
+const ambientesComplementarios = [
+	{ capacidad: 0, ambienteComplementario: "Sala de Usos Múltiples (SUM)" },
+	{ capacidad: 0, ambienteComplementario: "Cocina escolar" },
+	{ capacidad: 0, ambienteComplementario: "Comedor" },
+	{ capacidad: 0, ambienteComplementario: "Sala de Psicomotricidad" },
+	{ capacidad: 0, ambienteComplementario: "Dirección administrativa" },
+	{ capacidad: 0, ambienteComplementario: "Sala de maestros" },
+	{ capacidad: 0, ambienteComplementario: "Patio Inicial" },
+	{ capacidad: 0, ambienteComplementario: "Auditorio multiusos" },
+	{ capacidad: 0, ambienteComplementario: "Sala de reuniones" },
+	{ capacidad: 0, ambienteComplementario: "Laboratorio" },
+	{ capacidad: 0, ambienteComplementario: "Lactario" },
+	{ capacidad: 0, ambienteComplementario: "Topico" },
+];
+
+const ambientesDefault = [
+	{ capacidad: 0, ambienteComplementario: "Biblioteca escolar" },
+	{ capacidad: 0, ambienteComplementario: "Taller creativo" },
+	{ capacidad: 0, ambienteComplementario: "Taller EPT" },
+];
+
+export default function Settings({ projectData, school, handleSetClassrooms }) {
 	const [open, setOpen] = useState(false);
-	
+	const dispatch = useDispatch();
+	const navigate = useNavigate();
+
+	// Helper function para parsear datos si es necesario
+	const parseIfNeeded = (data) => {
+		if (!data) return null;
+		if (typeof data === "string") {
+			try {
+				// Primer parse
+				let parsed = JSON.parse(data);
+
+				// Si después del parse sigue siendo string, parsear de nuevo (doble escape)
+				if (typeof parsed === "string") {
+					console.log(
+						"⚠️ Detectado doble escape en parseIfNeeded, parseando nuevamente"
+					);
+					parsed = JSON.parse(parsed);
+				}
+
+				return parsed;
+			} catch (e) {
+				console.error("Error parsing data:", e);
+				return null;
+			}
+		}
+		return data;
+	};
+
+	// Helper function para convertir a string JSON si es necesario
+	const ensureString = (value) => {
+		if (value === null || value === undefined) return null;
+		if (typeof value === "string") return value;
+		return JSON.stringify(value);
+	};
+
+	// Función para preparar datos del proyecto antes de enviar al backend
+	const prepareProjectData = (baseProject, updates) => {
+		console.log("🔧 Preparando datos del proyecto...");
+		console.log("Base project:", baseProject);
+		console.log("Updates:", updates);
+
+		const prepared = {
+			// Copiar campos básicos (strings, numbers)
+			name: updates.name || baseProject.name,
+			tipologia: baseProject.tipologia,
+			ubication: baseProject.ubication,
+			departamento: baseProject.departamento,
+			provincia: baseProject.provincia,
+			distrito: baseProject.distrito,
+			client: baseProject.client,
+			manager: baseProject.manager,
+			zone: baseProject.zone,
+			parent_id: updates.parent_id || baseProject.parent_id,
+			capacity: baseProject.capacity || 0,
+			student: baseProject.student || 0,
+			room: baseProject.room || 0,
+			height: baseProject.height,
+			width: baseProject.width,
+			type_id: baseProject.type_id,
+			coordenadas: baseProject.coordenadas || "",
+			user_id: baseProject.user_id,
+			number_floors: baseProject.number_floors,
+			sublevel: baseProject.sublevel,
+			angle: baseProject.angle,
+
+			// Campos que SIEMPRE deben ser strings JSON
+			build_data: ensureString(
+				updates.build_data || baseProject.build_data
+			),
+			level: ensureString(updates.level || baseProject.level),
+			stairs: ensureString(updates.stairs || baseProject.stairs),
+			toilets_per_student: ensureString(
+				updates.toilets_per_student || baseProject.toilets_per_student
+			),
+			aforo: ensureString(updates.aforo || baseProject.aforo),
+			ambientes: ensureString(updates.ambientes || baseProject.ambientes),
+			puntos: baseProject.puntos,
+			vertices: baseProject.vertices,
+			vertices_rectangle: baseProject.vertices_rectangle,
+		};
+
+		console.log("✅ Datos preparados:", prepared);
+		return prepared;
+	};
+
+	// Obtener datos de aforo (puede venir como objeto o string JSON)
+	const aforoData = parseIfNeeded(projectData?.aforo);
+
+	// Estados para aforo
+	const [inicial, setInicial] = useState(
+		aforoData ? !!aforoData.aforoInicial : false
+	);
+	const [primaria, setPrimaria] = useState(
+		aforoData ? !!aforoData.aforoPrimaria : false
+	);
+	const [secundaria, setSecundaria] = useState(
+		aforoData ? !!aforoData.aforoSecundaria : false
+	);
+
+	const [aforoInicial, setAforoInicial] = useState(
+		aforoData?.aforoInicial || 0
+	);
+	const [aforoPrimaria, setAforoPrimaria] = useState(
+		aforoData?.aforoPrimaria || 0
+	);
+	const [aforoSecundaria, setAforoSecundaria] = useState(
+		aforoData?.aforoSecundaria || 0
+	);
+
+	const [aulaInicial, setAulaInicial] = useState(aforoData?.aulaInicial || 0);
+	const [aulaPrimaria, setAulaPrimaria] = useState(
+		aforoData?.aulaPrimaria || 0
+	);
+	const [aulaSecundaria, setAulaSecundaria] = useState(
+		aforoData?.aulaSecundaria || 0
+	);
+
+	// Estados para ambientes complementarios (viene como string JSON)
+	const ambientesData = parseIfNeeded(projectData?.ambientes);
+	const [rowsAC, setRowsAC] = useState(ambientesData || ambientesDefault);
+
+	// Estado para datos del Excel
+	const [dataExcel, setDataExcel] = useState(null);
+	const [tableAforo, setTableAforo] = useState(false);
+	const [loading, setLoading] = useState(false);
+	const [tipo, setTipo] = useState(projectData?.sublevel || "unidocente");
+	const [zone, setZone] = useState(projectData?.zone);
+
 	const handleDrawerToggle = () => setOpen(!open);
-	const handleSubmit = (evt) => {
-		evt.preventDefault();
-		const data = Object.fromEntries(new FormData(evt.target));
 
-		console.log(data);
-		alert("under construction...");
-	}
-	
-	const handleClick = (evt) => {
-		const inputs = document.querySelectorAll("input[type='number']");
-		const data = {};
+	// Cargar datos iniciales del Excel si existen
+	useEffect(() => {
+		if (projectData) {
+			const buildData = parseIfNeeded(projectData.build_data);
+			if (buildData) {
+				const excelData = {
+					...buildData,
+					levels: parseIfNeeded(projectData.level),
+					stairs: parseIfNeeded(projectData.stairs),
+					toilets_per_student: parseIfNeeded(
+						projectData.toilets_per_student
+					),
+				};
+				setDataExcel(excelData);
+				setTableAforo(true);
+			}
+		}
+	}, [projectData]);
 
-		inputs.forEach(el => {
-			const levelName = el.previousElementSibling.innerHTML.toLowerCase();
-			data[levelName] = Number(el.value);
+	// Función para importar Excel
+	const onImportExcel = async (file) => {
+		if (!zone) {
+			return {
+				error: true,
+				message: "Se debe tener una zona definida",
+			};
+		}
+
+		if (!inicial && !primaria && !secundaria) {
+			return {
+				error: true,
+				message: "Se debe seleccionar al menos un nivel",
+			};
+		}
+
+		var levels = [];
+		if (inicial) levels.push("inicial");
+		if (primaria) levels.push("primaria");
+		if (secundaria) levels.push("secundaria");
+
+		const data = JSON.stringify({
+			zone,
+			levels,
+			type: tipo,
 		});
 
-		school.setNumberOfClassrooms(data.inicial, data.primaria, data.secundaria);
-		school.pab[1].floors = [];
-		school.pab[2].floors = [];
-		school.setClassrooms();
-		school.setBathrooms(); // para evitar problemas en los calculos donde el largo de los baños importe
-		handleSetClassrooms(data);
-		handleDrawerToggle();
-	}
+		setLoading(true);
+
+		try {
+			const res = await readMatrizExcel(file, data);
+			setDataExcel(res.data);
+			console.log("datos del excel :: ", res.data);
+			setTableAforo(true);
+			setLoading(false);
+			return { error: false, message: "" };
+		} catch (error) {
+			setLoading(false);
+			return {
+				error: true,
+				message: "Error al procesar el archivo",
+			};
+		}
+	};
+
+	// Actualizar valores de aforo desde el Excel
+	useEffect(() => {
+		if (dataExcel && dataExcel.levels) {
+			for (var key of Object.keys(dataExcel.levels)) {
+				if (key === "inicial") {
+					setAforoInicial(dataExcel.levels[key].aforo);
+					setAulaInicial(dataExcel.levels[key].aulas);
+				} else if (key === "primaria") {
+					setAforoPrimaria(dataExcel.levels[key].aforo);
+					setAulaPrimaria(dataExcel.levels[key].aulas);
+				} else if (key === "secundaria") {
+					setAforoSecundaria(dataExcel.levels[key].aforo);
+					setAulaSecundaria(dataExcel.levels[key].aulas);
+				}
+			}
+		}
+	}, [dataExcel]);
+
+	// Manejadores para ambientes complementarios
+	const handleOnChangeAC = (index, name, value) => {
+		const copyRowsAC = [...rowsAC];
+		copyRowsAC[index] = {
+			...copyRowsAC[index],
+			[name]: value,
+		};
+		setRowsAC(copyRowsAC);
+	};
+
+	const handleOnAddAC = (ambiente) => {
+		const verificador = rowsAC.find(
+			(item) => item.ambienteComplementario === ambiente
+		);
+		if (!verificador && ambiente !== "") {
+			setRowsAC([
+				...rowsAC,
+				{ capacidad: 0, ambienteComplementario: ambiente },
+			]);
+		}
+	};
+
+	const handleOnRemoveAC = (index) => {
+		const copyRowsAC = [...rowsAC];
+		copyRowsAC.splice(index, 1);
+		setRowsAC(copyRowsAC);
+	};
+
+	// Función principal para crear nueva versión
+	const handleCreateNewVersion = async () => {
+		if (!dataExcel) {
+			alert(
+				"Debe cargar primero un archivo Excel con los datos de aforo"
+			);
+			return;
+		}
+
+		try {
+			setLoading(true);
+
+			// 1. Determinar el parent_id y calcular número de versión
+			const parentId =
+				projectData.parent_id === 0
+					? projectData.id
+					: projectData.parent_id;
+
+			// Calcular número de versión simple
+			// Extraer el número actual de la versión del nombre
+			const currentVersionMatch = projectData.name.match(/VERSION (\d+)/);
+			const currentVersionNumber = currentVersionMatch
+				? parseInt(currentVersionMatch[1])
+				: 1;
+			const nextVersionNumber = currentVersionNumber + 1;
+
+			console.log(
+				`🔢 Versión actual: ${currentVersionNumber}, Creando VERSION ${nextVersionNumber}`
+			);
+
+			// 2. Preparar datos de aforo
+			const allDataAforo = {
+				aforoInicial: aforoInicial,
+				aulaInicial: aulaInicial,
+				aforoPrimaria: aforoPrimaria,
+				aulaPrimaria: aulaPrimaria,
+				aforoSecundaria: aforoSecundaria,
+				aulaSecundaria: aulaSecundaria,
+			};
+
+			// 3. Preparar datos del Excel para el backend
+			const projectExcelData = mapFormDataToExcel({
+				dataExcel,
+				rowsAC,
+				aulaInicial,
+				aulaPrimaria,
+				aulaSecundaria,
+			});
+
+			console.log("📊 Datos a enviar al Excel:", projectExcelData);
+
+			// 4. Extraer datos para Redux
+			const {
+				aula_psicomotricidad,
+				aulas_inicial_ciclo1,
+				aulas_inicial_ciclo2,
+				aulas_primaria,
+				aulas_secundaria,
+				biblioteca,
+				canchas_deportivas,
+				cocina,
+				depositos,
+				direccion_admin,
+				laboratorio,
+				lactario,
+				quiosco,
+				innovacion_primaria,
+				innovacion_secundaria,
+				sala_profesores,
+				sala_reuniones,
+				sshh_admin,
+				sshh_cocina,
+				sum_inicial,
+				sum_prim_sec,
+				taller_creativo_primaria,
+				taller_creativo_secundaria,
+				taller_ept,
+				topico,
+			} = projectExcelData;
+
+			// 5. Actualizar Redux con los datos de ambientes
+			dispatch(
+				setAmbienceData({
+					aula_psicomotricidad,
+					aulas_inicial_ciclo1,
+					aulas_inicial_ciclo2,
+					aulas_primaria,
+					aulas_secundaria,
+					biblioteca,
+					canchas_deportivas,
+					cocina,
+					depositos,
+					direccion_admin,
+					laboratorio,
+					lactario,
+					quiosco,
+					innovacion_primaria,
+					innovacion_secundaria,
+					sala_profesores,
+					sala_reuniones,
+					sshh_admin,
+					sshh_cocina,
+					sum_inicial,
+					sum_prim_sec,
+					taller_creativo_primaria,
+					taller_creativo_secundaria,
+					taller_ept,
+					topico,
+				})
+			);
+
+			// 6. Actualizar el Excel en el backend
+			try {
+				const excelUpdateResult = await updateProjectExcelService(
+					projectExcelData
+				);
+				console.log(
+					"✅ Excel actualizado correctamente:",
+					excelUpdateResult
+				);
+			} catch (excelError) {
+				console.error("❌ Error al actualizar Excel:", excelError);
+				alert("Advertencia: No se pudo actualizar el Excel");
+			}
+
+			// 7. Preparar datos completos para la nueva versión usando prepareProjectData
+			const dataComplete = prepareProjectData(projectData, {
+				name: `VERSION ${nextVersionNumber}`,
+				parent_id: parentId,
+				build_data: {
+					classroom_measurements: dataExcel.classroom_measurements,
+					result_data: dataExcel.result_data || {},
+					construction_info: dataExcel.construction_info,
+				},
+				aforo: allDataAforo,
+				ambientes: rowsAC,
+				toilets_per_student: dataExcel.toilets_per_student,
+				stairs: dataExcel.stairs,
+				level: projectData.level,
+			});
+
+			console.log("📦 Datos a enviar al backend:", dataComplete);
+
+			// 8. Crear nueva versión usando createProjectService
+			const response = await createProjectService(dataComplete);
+			const createdVersion = response.data.project;
+
+			if (createdVersion) {
+				console.log(
+					`✅ VERSION ${nextVersionNumber} creada exitosamente`
+				);
+
+				// 9. Crear thumbnail
+				createThumbnail(createdVersion.id);
+
+				// 10. Actualizar Redux
+				dispatch(addProject({ child: createdVersion }));
+
+				setLoading(false);
+
+				// 11. Mostrar mensaje de éxito
+				alert(`✅ VERSION ${nextVersionNumber} creada exitosamente`);
+				handleDrawerToggle();
+
+				// 12. Navegar a la nueva versión
+				navigate(`/project/${createdVersion.id}`);
+			}
+		} catch (error) {
+			console.error("❌ Error al crear nueva versión:", error);
+			setLoading(false);
+			alert(
+				`Error al crear nueva versión: ${
+					error.message || "Error desconocido"
+				}`
+			);
+		}
+	};
+
+	console.log("rowSAC::", typeof rowsAC);
 
 	return (
 		<>
-			<Button onClick={handleDrawerToggle}>
-				<SettingsIcon htmlColor="#3699FF" />&nbsp; Ajustes
-			</Button>
+			<StyledButton onClick={handleDrawerToggle}>
+				<SettingsIcon htmlColor="#3699FF" />
+				&nbsp; Ajustes
+			</StyledButton>
 
-			<Drawer
-				anchor="left"
-				open={open}
-				onClose={() => setOpen(false)}
-			>
+			<Drawer anchor="left" open={open} onClose={() => setOpen(false)}>
 				<DrawerHeader>
-					<h3>Configuración</h3>
+					<h3>Configuración del Proyecto</h3>
 					<IconButton onClick={() => setOpen(false)}>
 						<CloseOutlinedIcon />
 					</IconButton>
 				</DrawerHeader>
 				<Divider />
-				<Box sx={{
-					minWidth: 350,
-					padding: "20px 24px",
-				}}>
-					<div style={{ paddingBottom: "25px", display: "grid", gap: 16 }}>
-						<div style={{ display: "flex", justifyContent: "center", gap: 16 }}>
-							<label style={{ width: 100 }}>
-								<span className="label">INICIAL</span>
-								<input
-									type="number"
-									min={0}
-									max={50}
-									defaultValue={school.numberOfClassrooms.inicial}
-								/>
-							</label>
 
-							<label style={{ width: 100 }}>
-								<span className="label">PRIMARIA</span>
-								<input
-									type="number"
-									min={0}
-									max={50}
-									defaultValue={school.numberOfClassrooms.primaria}
-								/>
-							</label>
-							<label style={{ width: 100 }}>
-								<span className="label">SECUNDARIA</span>
-								<input
-									type="number"
-									min={0}
-									max={50}
-									defaultValue={school.numberOfClassrooms.secundaria}
-								/>
-							</label>
-						</div>
-						<div style={{ display: "flex", justifyContent: "center" }}>
-							<Tooltip title="Actualizar numero de aulas" disableInteractive>
-								<MuiButton variant="contained" color="success" size="small" onClick={handleClick}>
-									Aceptar
-								</MuiButton>
-							</Tooltip>
-						</div>
-						<div style={{ display: "flex", justifyContent: "center" }}>
-							<ToggleButtonsMultiple />
-						</div>
-					</div>
+				{loading && <LinearProgress color="secondary" />}
 
-					<form
-						style={{ display: "flex", flexDirection: "column", gap: 16 }}
-						onSubmit={handleSubmit}
+				<Box
+					sx={{
+						minWidth: 450,
+						maxWidth: 500,
+						padding: "20px 24px",
+						overflowY: "auto",
+						maxHeight: "calc(100vh - 100px)",
+					}}
+				>
+					{/* Información Actual del Proyecto */}
+					<Box
+						sx={{
+							mb: 3,
+							p: 2,
+							bgcolor: "grey.50",
+							borderRadius: 2,
+						}}
 					>
-						<div>
-							<label>
-								<span className="label">NOMBRE</span>
-								<input type="text" defaultValue={state.name} />
-							</label>
-						</div>
+						<Typography
+							variant="subtitle2"
+							color="text.secondary"
+							gutterBottom
+						>
+							PROYECTO ACTUAL
+						</Typography>
+						<Typography variant="h6" fontWeight="bold" gutterBottom>
+							{projectData?.name}
+						</Typography>
+						<Grid container spacing={1}>
+							<Grid item xs={6}>
+								<Typography
+									variant="caption"
+									color="text.secondary"
+								>
+									Zona:
+								</Typography>
+								<Typography variant="body2" fontWeight="500">
+									{UpperLowerCase(projectData?.zone || "N/A")}
+								</Typography>
+							</Grid>
+							<Grid item xs={6}>
+								<Typography
+									variant="caption"
+									color="text.secondary"
+								>
+									Tipo:
+								</Typography>
+								<Typography variant="body2" fontWeight="500">
+									{UpperLowerCase(
+										projectData?.sublevel || "N/A"
+									)}
+								</Typography>
+							</Grid>
+						</Grid>
+					</Box>
 
-						<div>
-							<label>
-								<span className="label">TIPOLOGÍA</span>
-								<input type="text" disabled defaultValue="Colegios" />
-							</label>
-						</div>
-						<div>
-							<label>
-								<span className="label">ZONA</span>
-								<input type="text" defaultValue={state.zone} />
-							</label>
-						</div>
-						<div>
-							<div style={{ display: "flex", gap: 16 }}>
-								<label>
-									<span className="label">AFORO MAXIMO</span>
-									<input type="text" />
-								</label>
+					<Divider sx={{ mb: 3 }} />
 
-								<label>
-									<span className="label">CANTIDAD DE AULAS</span>
-									<input type="text" />
-								</label>
-							</div>
-						</div>
-						
-						{/* <div> */}
-							<sub>UBICACIÓN</sub>
-							<div>
-								<label>
-									<span className="label">PROVINCIA</span>
-									<input type="text" />
-								</label>
-							</div>
-							<div>
-								<label>
-									<span className="label">DISTRITO</span>
-									<input type="text" />
-								</label>
-							</div>
-							<div>
-								<div style={{ display: "flex", gap: 15 }}>
-									<label>
-										<span className="label">RESPONSABLE</span>
-										<input type="text" />
-									</label>
+					{/* Sección de Aforo */}
+					<Typography
+						variant="h6"
+						gutterBottom
+						sx={{ fontWeight: "bold", mb: 2 }}
+					>
+						AFORO ACTUAL
+					</Typography>
 
-									<label>
-										<span className="label">CLIENTE</span>
-										<input type="text" />
-									</label>
-								</div>
-							</div>
+					{/* Mostrar valores actuales */}
+					{!tableAforo && aforoData && (
+						<Box
+							sx={{
+								mb: 2,
+								p: 2,
+								bgcolor: "#e3f2fd",
+								borderRadius: 1,
+							}}
+						>
+							<Typography
+								variant="body2"
+								color="text.secondary"
+								gutterBottom
+							>
+								Valores actuales del proyecto:
+							</Typography>
+							<Grid container spacing={1}>
+								{aforoData.aforoInicial > 0 && (
+									<Grid item xs={12}>
+										<Typography variant="body2">
+											<strong>Inicial:</strong>{" "}
+											{aforoData.aforoInicial} alumnos -{" "}
+											{aforoData.aulaInicial} aulas
+										</Typography>
+									</Grid>
+								)}
+								{aforoData.aforoPrimaria > 0 && (
+									<Grid item xs={12}>
+										<Typography variant="body2">
+											<strong>Primaria:</strong>{" "}
+											{aforoData.aforoPrimaria} alumnos -{" "}
+											{aforoData.aulaPrimaria} aulas
+										</Typography>
+									</Grid>
+								)}
+								{aforoData.aforoSecundaria > 0 && (
+									<Grid item xs={12}>
+										<Typography variant="body2">
+											<strong>Secundaria:</strong>{" "}
+											{aforoData.aforoSecundaria} alumnos
+											- {aforoData.aulaSecundaria} aulas
+										</Typography>
+									</Grid>
+								)}
+							</Grid>
+						</Box>
+					)}
 
-							<sub>TERRENO</sub>
-							<div>
-								<label>
-									<span className="label">...</span>
-									<input type="text" />
-								</label>
-							</div>
+					<FileButtonModal onImportExcel={onImportExcel} />
 
-							<sub>AMBIENTES COMPLEMENTARIOS</sub>
-							<div>
-								<label>
-									<span className="label">...</span>
-									<input type="text" />
-								</label>
-							</div>
+					{tableAforo && (inicial || primaria || secundaria) && (
+						<Box sx={{ mt: 3 }}>
+							<Grid container mb=".5rem" alignItems="center">
+								<Grid item xs={4} textAlign="center">
+									<Typography
+										variant="body2"
+										fontWeight="bold"
+									>
+										GRADO
+									</Typography>
+								</Grid>
+								<Grid item xs={4} textAlign="center">
+									<Typography
+										variant="body2"
+										fontWeight="bold"
+									>
+										AFORO POR GRADO
+									</Typography>
+								</Grid>
+								<Grid item xs={4} textAlign="center">
+									<Typography
+										variant="body2"
+										fontWeight="bold"
+									>
+										CANTIDAD DE AULAS
+									</Typography>
+								</Grid>
+							</Grid>
 
-							<sub>DATOS DEL PROYECTO</sub>
-							<div>
-								<label>
-									<span className="label">ANCHO DE MURO</span>
-									<input type="text" />
-								</label>
-							</div>
-							<div>
-								<label>
-									<span className="label">ACABO DE MURO EXTERIOR</span>
-									<input type="text" />
-								</label>
-							</div>
-							<div>
-								<label>
-									<span className="label">ACABADO DE PISO DE AULA</span>
-									<input type="text" />
-								</label>
-							</div>
-							<div>
-								<label>
-									<span className="label">ACABADO DE PISO DE AULA</span>
-									<input type="text" />
-								</label>
-							</div>
+							{inicial &&
+								nivelGrid("INICIAL", aforoInicial, aulaInicial)}
+							{primaria &&
+								nivelGrid(
+									"PRIMARIA",
+									aforoPrimaria,
+									aulaPrimaria
+								)}
+							{secundaria &&
+								nivelGrid(
+									"SECUNDARIA",
+									aforoSecundaria,
+									aulaSecundaria
+								)}
+						</Box>
+					)}
 
-							<sub>ESTRUCTURA</sub>
-							<div>
-								<div style={{ display: "flex", gap: 15 }}>
-									<label>
-										<span className="label">LARGO COLUMNA (CM)</span>
-										<input type="text" />
-									</label>
+					<Divider sx={{ my: 3 }} />
 
-									<label>
-										<span className="label">ANCHO COLUMNA</span>
-										<input type="text" />
-									</label>
-								</div>
-							</div>
-							<div>
-								<label>
-									<span className="label">ACABADO DE PISO - AULA</span>
-									<input type="text" />
-								</label>
-							</div>
-						{/* </div> */}
+					{/* Sección de Ambientes Complementarios */}
+					<Typography
+						variant="h6"
+						gutterBottom
+						sx={{ fontWeight: "bold", mb: 2 }}
+					>
+						AMBIENTES COMPLEMENTARIOS
+					</Typography>
 
-						<div style={{ padding: "16px 0" }}>
-							<MuiButton variant="contained" color="success" type="submit">
-								Guardar
-							</MuiButton>
-						</div>
-					</form>
+					{/* Mostrar ambientes actuales */}
+
+					<Box sx={{ mb: 2 }}>
+						<select
+							style={{
+								width: "100%",
+								padding: "8px",
+								borderRadius: "4px",
+								border: "1px solid #ccc",
+							}}
+							onChange={(e) => handleOnAddAC(e.target.value)}
+							value=""
+						>
+							<option value="">Seleccione un ambiente</option>
+							{ambientesComplementarios.map((ambiente) => (
+								<option
+									key={ambiente.ambienteComplementario}
+									value={ambiente.ambienteComplementario}
+								>
+									{UpperLowerCase(
+										ambiente.ambienteComplementario
+									)}
+								</option>
+							))}
+						</select>
+					</Box>
+
+					{rowsAC.length > 0 && (
+						<Box>
+							<Grid container spacing={1} sx={{ mb: 1 }}>
+								<Box
+									sx={{
+										mb: 2,
+										p: 2,
+										bgcolor: "#e8f5e9",
+										borderRadius: 1,
+									}}
+								>
+									<Typography
+										variant="body2"
+										fontWeight="bold"
+									>
+										AMBIENTES ACTUALES
+									</Typography>
+								</Box>
+							</Grid>
+
+							{rowsAC.map((row, index) => (
+								<RowFormAC
+									key={index}
+									{...row}
+									onChange={(name, value) =>
+										handleOnChangeAC(index, name, value)
+									}
+									onRemove={() => handleOnRemoveAC(index)}
+									disabledDeleted={index}
+								/>
+							))}
+						</Box>
+					)}
+
+					<Divider sx={{ my: 3 }} />
+
+					{/* Sección de Visualización */}
+					<Typography
+						variant="h6"
+						gutterBottom
+						sx={{ fontWeight: "bold", mb: 2 }}
+					>
+						VISUALIZACIÓN
+					</Typography>
+
+					<Box
+						sx={{
+							display: "flex",
+							justifyContent: "center",
+							mb: 3,
+						}}
+					>
+						<ToggleButtonsMultiple />
+					</Box>
+
+					{/* Botón para crear nueva versión */}
+					<Box sx={{ mt: 4, display: "flex", gap: 2 }}>
+						<Button
+							variant="outlined"
+							fullWidth
+							onClick={handleDrawerToggle}
+						>
+							Cancelar
+						</Button>
+						<Button
+							variant="contained"
+							color="success"
+							fullWidth
+							onClick={handleCreateNewVersion}
+							disabled={loading || !dataExcel}
+						>
+							Crear Nueva Versión
+						</Button>
+					</Box>
 				</Box>
 			</Drawer>
 		</>
-	)
+	);
 }
 
+// Componente para el botón de carga de Excel
+function FileButtonModal({ onImportExcel }) {
+	const [open, setOpen] = useState(false);
+	const [loading, setLoading] = useState(false);
+
+	const handleOpen = () => setOpen(true);
+	const handleClose = () => setOpen(false);
+
+	const handleToggleLoading = () => setLoading((prev) => !prev);
+
+	const handleChange = async (evt) => {
+		const file = evt.target.files[0];
+		if (!file) return;
+
+		handleToggleLoading();
+		const { error, message } = await onImportExcel(file);
+		handleToggleLoading();
+
+		if (error) {
+			handleClose();
+			return alert(message);
+		}
+
+		handleClose();
+	};
+
+	return (
+		<>
+			{loading && <LinearProgress color="secondary" />}
+
+			<Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+				<Button
+					variant="contained"
+					color="primary"
+					onClick={handleOpen}
+					size="small"
+				>
+					Actualizar Aforo
+				</Button>
+			</Box>
+
+			<Modal
+				aria-labelledby="transition-modal-title"
+				aria-describedby="transition-modal-description"
+				open={open}
+				onClose={handleClose}
+				closeAfterTransition
+			>
+				<Fade in={open}>
+					<Box sx={styleModal}>
+						<Grid container spacing={2}>
+							<Grid item xs={12}>
+								<Typography variant="h6">
+									Actualizar Aforo
+								</Typography>
+							</Grid>
+
+							<Grid item xs={12}>
+								<input
+									type="file"
+									accept=".xlsx, .xls"
+									onChange={handleChange}
+									style={{ display: "none" }}
+									id="button_file_settings"
+								/>
+								<label htmlFor="button_file_settings">
+									<Button
+										variant="outlined"
+										component="span"
+										fullWidth
+									>
+										Subir Archivo
+									</Button>
+								</label>
+							</Grid>
+
+							<Grid item xs={12}>
+								<a
+									href="/descargas/template_project.xlsx"
+									download="Plantilla del Proyecto.xlsx"
+									style={{ textDecoration: "none" }}
+								>
+									<Button
+										variant="contained"
+										color="primary"
+										fullWidth
+									>
+										Descargar Plantilla
+									</Button>
+								</a>
+							</Grid>
+
+							<Grid item xs={12}>
+								<Button
+									variant="outlined"
+									color="secondary"
+									fullWidth
+									onClick={handleClose}
+								>
+									Cerrar
+								</Button>
+							</Grid>
+						</Grid>
+					</Box>
+				</Fade>
+			</Modal>
+		</>
+	);
+}
+
+// Componente para mostrar niveles
+const nivelGrid = (label, aforo, aula) => {
+	return (
+		<Grid container spacing={2} marginBottom="1rem">
+			<Grid item xs={4}>
+				<input
+					style={{
+						width: "100%",
+						padding: "8px",
+						textAlign: "center",
+						fontSize: "14px",
+						border: "1px solid #ccc",
+						borderRadius: "4px",
+					}}
+					type="text"
+					value={label}
+					disabled
+				/>
+			</Grid>
+			<Grid item xs={4}>
+				<input
+					style={{
+						width: "100%",
+						padding: "8px",
+						textAlign: "center",
+						fontSize: "14px",
+						border: "1px solid #ccc",
+						borderRadius: "4px",
+					}}
+					value={aforo}
+					disabled
+				/>
+			</Grid>
+			<Grid item xs={4}>
+				<input
+					style={{
+						width: "100%",
+						padding: "8px",
+						textAlign: "center",
+						fontSize: "14px",
+						border: "1px solid #ccc",
+						borderRadius: "4px",
+					}}
+					value={aula}
+					disabled
+				/>
+			</Grid>
+		</Grid>
+	);
+};
+
+// Componente para botones de visualización
 function ToggleButtonsMultiple() {
-	const [formats, setFormats] = useState(() => JSON.parse(localStorage.getItem("load")) || []); // ["door", "window"]
+	const [formats, setFormats] = useState(
+		() => JSON.parse(localStorage.getItem("load")) || []
+	);
 	const dispatch = useDispatch();
 
 	const handleFormat = (event, newFormats) => {
 		localStorage.setItem("load", JSON.stringify(newFormats));
 		setFormats(newFormats);
-	}
+	};
 
 	return (
-		<ToggleButtonGroup
-			value={formats}
-			onChange={handleFormat}
-		>
+		<ToggleButtonGroup value={formats} onChange={handleFormat}>
 			<ToggleButton value="door" onClick={() => dispatch(toggleDoor())}>
 				<SensorDoorOutlinedIcon />
 			</ToggleButton>
-			<ToggleButton value="window" onClick={() => dispatch(toggleWindow())}>
+			<ToggleButton
+				value="window"
+				onClick={() => dispatch(toggleWindow())}
+			>
 				<WindowOutlinedIcon />
 			</ToggleButton>
-			<ToggleButton value="railing">
-				<ThreeDRotationOutlinedIcon onClick={() => dispatch(toggleRailing())} />
+			<ToggleButton
+				value="railing"
+				onClick={() => dispatch(toggleRailing())}
+			>
+				<ThreeDRotationOutlinedIcon />
 			</ToggleButton>
-			{/* <ToggleButton value="color" aria-label="color" disabled>
-			<FormatColorFillIcon />
-			<ArrowDropDownIcon />
-			</ToggleButton> */}
 		</ToggleButtonGroup>
-	)
+	);
 }
 
-
-const Button = styled(MuiButton)({
-    borderRadius: ".42rem",
-    color: "#3F4254",
-    padding: ".60rem 1rem",
-    fontFamily: "inherit",
-    textTransform: "none",
-    border: "1px solid #E4E6EF",
+// Styled Components
+const StyledButton = styled(MuiButton)({
+	borderRadius: ".42rem",
+	color: "#3F4254",
+	padding: ".60rem 1rem",
+	fontFamily: "inherit",
+	textTransform: "none",
+	border: "1px solid #E4E6EF",
 	margin: ".3rem .4rem",
-    boxShadow: "none",
-    backgroundColor: "#E4E6EF",
-    "&:hover": {
-        backgroundColor: "#d8dbe8",
-        // boxShadow: "none"
-    }
+	boxShadow: "none",
+	backgroundColor: "#E4E6EF",
+	"&:hover": {
+		backgroundColor: "#d8dbe8",
+	},
 });
 
-const DrawerHeader = styled('div')(({ theme }) => ({
+const DrawerHeader = styled("div")(({ theme }) => ({
 	display: "flex",
 	justifyContent: "space-between",
 	alignItems: "center",
 	padding: "0px 1.5rem",
-	// necessary for content to be below app bar
 	...theme.mixins.toolbar,
 }));

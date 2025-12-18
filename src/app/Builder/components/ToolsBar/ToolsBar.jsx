@@ -109,7 +109,8 @@ export default function ToolsBar({
 
 					<li>
 						<Settings
-							state={state}
+							//state={state}
+							projectData={state}
 							school={school}
 							handleSetClassrooms={handleSetClassrooms}
 						/>
@@ -141,7 +142,7 @@ export default function ToolsBar({
 						</button> */}
 					</li>
 
-					<li>
+					{/* <li>
 						<select
 							id="select-view"
 							style={{
@@ -155,7 +156,7 @@ export default function ToolsBar({
 							<option value="1">VISTA COMPLETA</option>
 							<option value="2">VISTA MUROS</option>
 						</select>
-					</li>
+					</li> */}
 
 					{/* <li>
 						<Button id="save-obj">

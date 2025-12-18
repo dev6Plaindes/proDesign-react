@@ -132,7 +132,15 @@ export class School {
 	setVertices(vertices: string[] | string) {
 		if (typeof vertices === "string") {
 			try {
-				this.vertices = JSON.parse(vertices);
+				// Primer parse
+				let parsed = JSON.parse(vertices);
+
+				// Si después del parse sigue siendo string, parsear de nuevo
+				if (typeof parsed === "string") {
+					parsed = JSON.parse(parsed);
+				}
+
+				this.vertices = parsed;
 			} catch (error) {
 				console.error("Error al parsear vertices:", error);
 				this.vertices = [];
@@ -145,7 +153,15 @@ export class School {
 	setVerticesRectangle(verticesRectangle: string[] | string) {
 		if (typeof verticesRectangle === "string") {
 			try {
-				this.verticesRectangle = JSON.parse(verticesRectangle);
+				// Primer parse
+				let parsed = JSON.parse(verticesRectangle);
+
+				// Si después del parse sigue siendo string, parsear de nuevo
+				if (typeof parsed === "string") {
+					parsed = JSON.parse(parsed);
+				}
+
+				this.verticesRectangle = parsed;
 			} catch (error) {
 				console.error("Error al parsear verticesRectangle:", error);
 				this.verticesRectangle = [];
@@ -229,10 +245,19 @@ export class School {
 		let parsedAmbientes = [];
 
 		try {
-			parsedAmbientes =
+			let ambientesData =
 				typeof state.ambientes === "string"
 					? JSON.parse(state.ambientes)
 					: state.ambientes;
+
+			if (typeof ambientesData === "string") {
+				console.log(
+					"⚠️ Detectado doble escape en ambientes, parseando nuevamente"
+				);
+				ambientesData = JSON.parse(ambientesData);
+			}
+
+			parsedAmbientes = ambientesData;
 		} catch (e) {
 			console.error("Error al parsear 'state.ambientes':", e);
 			parsedAmbientes = [];
