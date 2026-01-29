@@ -1,47 +1,46 @@
-import { useSelector, useDispatch } from "react-redux";
-import sha1 from "sha1";
-// import { isCheckToken } from '../providers/authProvider';
-import { login, logout } from "../redux/auth";
-//import { verifySSO } from "../services/authService";
-import logSSO from "../utils/logSSO";
-import { geolocationService } from "../services/utilsService";
-import { HOSTNAME } from "../../constants";
+import { useDispatch, useSelector } from "react-redux";
+import { login, logout, checkingCredentials } from "../redux/auth";
+import { isCheckToken } from "../providers/authProvider"; // 👈 backend
 
 export const useAuthStore = () => {
-	const status = useSelector((state) => state.auth.status);
+	const { status } = useSelector((state) => state.auth);
 	const dispatch = useDispatch();
 
-	const useCheckAuth = async () => {
+	const checkAuth = async () => {
+		const token = localStorage.getItem("token");
+
+		// ❌ No hay token → logout
+		if (!token) {
+			dispatch(logout());
+			return;
+		}
+
 		try {
-			// const { clientIP } = await geolocationService(); logSSO(clientIP);
+			dispatch(checkingCredentials());
 
-			// const { user, data } = await verifySSO({
-			// 	browserId: sha1(window.navigator.userAgent),
-			// 	browserIp: sha1(clientIP),
-			// 	browserAud: sha1(clientIP + window.navigator.userAgent + HOSTNAME),
-			// 	productId: "pro-design"
-			// });
+			// ✅ Backend valida token y devuelve usuario
+			const res = await isCheckToken(token);
+			// console.log("token:",token);
+			
 
-			localStorage.setItem("SESS_ID", user.id_master);
+			const { usuario } = res.data;
+			const { id, id_master, name, lastname, email } = usuario;
 
 			dispatch(
 				login({
-					uid: user.id,
-					uid_master: user.id_master,
-					name: user.name,
-					lastname: user.lastname,
-					email: user.email,
+					uid: id,
+					uid_master: id_master,
+					name,
+					lastname,
+					email,
 				})
 			);
-
-			// if (!token) return dispatch(logout());
-			// const token = localStorage.getItem('token');
-			// const { data } = await isCheckToken(token);
-			// const user = data.data;
 		} catch (error) {
-			console.log(error.message);
+			// ❌ Token inválido / expirado
+			localStorage.removeItem("token");
 			dispatch(logout());
 		}
 	};
-	return { status, useCheckAuth };
+
+	return { status, checkAuth };
 };

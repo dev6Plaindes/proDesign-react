@@ -20,7 +20,7 @@ import {
 	saveDistributionToAPI,
 } from "../../../utils/distributionAPI";
 
-export default function TerrainPlanner({ school, state }) {
+export default function TerrainPlanner({ school, state, height }) {
 	const [coordinates, setCoordinates] = useState([]);
 	const [maxRectangle, setMaxRectangle] = useState(null);
 	const [isCalculating, setIsCalculating] = useState(false);
@@ -54,7 +54,7 @@ export default function TerrainPlanner({ school, state }) {
 	const [totalFloors, setTotalFloors] = useState(1);
 	const currentFloor = useSelector((state) => state.building.floor);
 
-	const [layoutMode, setLayoutMode] = useState("horizontal");
+	const [layoutMode, setLayoutMode] = useState("");
 
 	//estados para el hover de ambientes complementarios
 	const [hoveredAmbiente, setHoveredAmbiente] = useState(null);
@@ -501,6 +501,9 @@ export default function TerrainPlanner({ school, state }) {
 			setSavingPerimeters(false);
 		}
 	};
+
+
+	
 
 	const calcularPerimetroPabellon = (elementos, pabellonFisico) => {
 		// ✅ RECOLECTAR TODOS LOS ELEMENTOS DEL PABELLÓN FÍSICO
@@ -3612,6 +3615,54 @@ export default function TerrainPlanner({ school, state }) {
 		setConfigurationSaved(false);
 	};
 
+	// Calculate Distribution for model
+	// params : modeLayout (horizontal | vertical)
+	const calculateDistributionModel = (modeLayout) => {
+		setLayoutMode(modeLayout)
+		const currentCapacity = calculateCapacity();
+		if (!maxRectangle) return;
+		console.log("capacityInfo", capacityInfo);
+		console.log("currentCapacity", currentCapacity);
+		const inicialTotal = parseInt(classroomInicial) || 0;
+		const primariaTotal = parseInt(classroomPrimaria) || 0;
+		const secundariaTotal = parseInt(classroomSecundaria) || 0;
+
+		if (inicialTotal + primariaTotal + secundariaTotal === 0) {
+			alert("Debes ingresar al menos una cantidad de aulas");
+			return;
+		}
+
+		const { enPabellones, lateralesCancha, superiores } = classifyAmbientes(
+			arrayTransformado,
+			primariaTotal > 0,
+			secundariaTotal > 0
+		);
+
+		if (layoutMode === modeLayout) {
+			// Tu distribución actual
+			calculateHorizontalDistribution(
+				inicialTotal,
+				primariaTotal,
+				secundariaTotal,
+				enPabellones,
+				lateralesCancha,
+				superiores,
+				currentCapacity
+			);
+		} else {
+			calculateVerticalDistribution(
+				inicialTotal,
+				primariaTotal,
+				secundariaTotal,
+				enPabellones,
+				lateralesCancha,
+				superiores,
+				currentCapacity
+			);
+		}
+		setConfigurationSaved(false);
+	};
+
 	const renderLayoutHorizontal = (
 		floorData,
 		origin,
@@ -5571,380 +5622,355 @@ export default function TerrainPlanner({ school, state }) {
 	const { points, rectangleSVG, elementos, pabellones, bounds, canchaSVG } =
 		convertToSVG();
 
+
 	return (
-		<div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6">
-			<div className="lg:col-span-1 space-y-6">
-				{maxRectangle && (
-					<Grid
-						container
-						spacing={150} // eleminar despues
-						sx={{
-							padding: 2,
-						}}
-					>
-						<Grid item xs={6}>
-							<Grid container direction="column">
-								<Grid item sx={{ paddingLeft: 3 }}>
-									{/* ✅ ROSA DE LOS VIENTOS FIJA (Norte geográfico real) */}
-									<div className="flex-shrink-0">
-										<svg
-											width="80"
-											height="80"
-											viewBox="-50 -50 100 100"
-										>
-											{/* Fondo */}
-											<circle
-												cx="0"
-												cy="0"
-												r="40"
-												fill="rgba(255, 255, 255, 0.95)"
-												stroke="#334155"
-												strokeWidth="2"
-												filter="drop-shadow(0px 2px 4px rgba(0,0,0,0.2))"
-											/>
+		<div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 " style={{height: height, width:"100%", position: "relative"}}>
+				<div className="lg:col-span-1 space-y-6" style={{position: "absolute", top:10, left: 10}}>
+					<div className="flex-shrink-0">
+						<svg
+							width="80"
+							height="80"
+							viewBox="-50 -50 100 100"
+						>
+							{/* Fondo */}
+							<circle
+								cx="0"
+								cy="0"
+								r="40"
+								fill="rgba(255, 255, 255, 0.95)"
+								stroke="#334155"
+								strokeWidth="2"
+								filter="drop-shadow(0px 2px 4px rgba(0,0,0,0.2))"
+							/>
 
-											{/* Líneas cardinales */}
-											<line
-												x1="0"
-												y1="-35"
-												x2="0"
-												y2="35"
-												stroke="#e2e8f0"
-												strokeWidth="1"
-											/>
-											<line
-												x1="-35"
-												y1="0"
-												x2="35"
-												y2="0"
-												stroke="#e2e8f0"
-												strokeWidth="1"
-											/>
+							{/* Líneas cardinales */}
+							<line
+								x1="0"
+								y1="-35"
+								x2="0"
+								y2="35"
+								stroke="#e2e8f0"
+								strokeWidth="1"
+							/>
+							<line
+								x1="-35"
+								y1="0"
+								x2="35"
+								y2="0"
+								stroke="#e2e8f0"
+								strokeWidth="1"
+							/>
 
-											{/* Norte (rojo) */}
-											<path
-												d="M 0,-30 L -6,-12 L 0,-18 L 6,-12 Z"
-												fill="#ef4444"
-												stroke="#991b1b"
-												strokeWidth="1"
-											/>
-											<text
-												x="0"
-												y="-33"
-												textAnchor="middle"
-												className="text-sm font-bold"
-												fill="#ef4444"
-											>
-												N
-											</text>
-
-											{/* Sur */}
-											<path
-												d="M 0,30 L -6,12 L 0,18 L 6,12 Z"
-												fill="#94a3b8"
-												stroke="#475569"
-												strokeWidth="1"
-											/>
-											<text
-												x="0"
-												y="38"
-												textAnchor="middle"
-												className="text-sm font-semibold"
-												fill="#64748b"
-											>
-												S
-											</text>
-
-											{/* Este y Oeste */}
-											<text
-												x="33"
-												y="5"
-												textAnchor="middle"
-												className="text-sm"
-												fill="#64748b"
-											>
-												E
-											</text>
-											<text
-												x="-33"
-												y="5"
-												textAnchor="middle"
-												className="text-sm"
-												fill="#64748b"
-											>
-												O
-											</text>
-
-											{/* Centro */}
-											<circle
-												cx="0"
-												cy="0"
-												r="3"
-												fill="#334155"
-											/>
-										</svg>
-									</div>
-								</Grid>
-								<Grid item sx={{ paddingLeft: 2 }}>
-									{distribution && (
-										<Paper
-											elevation={3}
-											sx={{
-												flexShrink: 0,
-												px: 1,
-												py: 1,
-												backgroundColor: "primary.50",
-												border: 2,
-												borderColor: "primary.main",
-												borderRadius: 2,
-												maxWidth: 130,
-											}}
-										>
-											<Box
-												sx={{
-													display: "flex",
-													alignItems: "center",
-													gap: 1,
-													mb: 0.5,
-												}}
-											>
-												{/* <ExploreIcon
-													sx={{
-														fontSize: 16,
-														color: "text.secondary",
-													}}
-												/> */}
-												<Typography
-													variant="caption"
-													sx={{
-														fontWeight: 500,
-														color: "text.secondary",
-														textTransform:
-															"uppercase",
-														letterSpacing: 0.5,
-													}}
-												>
-													Fachada Principal
-												</Typography>
-											</Box>
-
-											<Typography
-												variant="h6"
-												sx={{
-													fontWeight: 700,
-													color: "primary.main",
-													mb: 0.5,
-												}}
-											>
-												{(() => {
-													const angle =
-														maxRectangle.angle;
-													const normalizedAngle =
-														((angle % 360) + 360) %
-														360;
-
-													if (
-														normalizedAngle >=
-															337.5 ||
-														normalizedAngle < 22.5
-													)
-														return "Norte";
-													if (
-														normalizedAngle >=
-															22.5 &&
-														normalizedAngle < 67.5
-													)
-														return "Noreste";
-													if (
-														normalizedAngle >=
-															67.5 &&
-														normalizedAngle < 112.5
-													)
-														return "Este";
-													if (
-														normalizedAngle >=
-															112.5 &&
-														normalizedAngle < 157.5
-													)
-														return "Sureste";
-													if (
-														normalizedAngle >=
-															157.5 &&
-														normalizedAngle < 202.5
-													)
-														return "Sur";
-													if (
-														normalizedAngle >=
-															202.5 &&
-														normalizedAngle < 247.5
-													)
-														return "Suroeste";
-													if (
-														normalizedAngle >=
-															247.5 &&
-														normalizedAngle < 292.5
-													)
-														return "Oeste";
-													if (
-														normalizedAngle >=
-															292.5 &&
-														normalizedAngle < 337.5
-													)
-														return "Noroeste";
-													return "N/A";
-												})()}
-											</Typography>
-
-											<Typography
-												variant="body2"
-												sx={{
-													color: "text.secondary",
-													fontSize: "0.75rem",
-												}}
-											>
-												(
-												{Math.round(maxRectangle.angle)}
-												°)
-											</Typography>
-										</Paper>
-									)}
-								</Grid>
-							</Grid>
-						</Grid>
-
-						{/* Segunda columna - Botones */}
-						<Grid item xs={6}>
-							<Grid
-								container
-								direction="column"
-								spacing={2}
-								sx={{ paddingTop: 3 }}
+							{/* Norte (rojo) */}
+							<path
+								d="M 0,-30 L -6,-12 L 0,-18 L 6,-12 Z"
+								fill="#ef4444"
+								stroke="#991b1b"
+								strokeWidth="1"
+							/>
+							<text
+								x="0"
+								y="-33"
+								textAnchor="middle"
+								className="text-sm font-bold"
+								fill="#ef4444"
 							>
-								{/* Fila de botones Horizontal y Vertical */}
-								<Grid item>
-									<Grid container direction="row" spacing={2}>
-										<Grid item>
-											<Button
-												variant={
-													layoutMode === "horizontal"
-														? "contained"
-														: "outlined"
-												}
-												onClick={() =>
-													setLayoutMode("horizontal")
-												}
-												size="small"
-												sx={{
-													textTransform: "none",
-												}}
-											>
-												<Building2 size={20} />
-												Modelo 1
-											</Button>
-										</Grid>
-										<Grid item>
-											<Button
-												variant={
-													layoutMode === "vertical"
-														? "contained"
-														: "outlined"
-												}
-												onClick={() =>
-													setLayoutMode("vertical")
-												}
-												size="small"
-												sx={{
-													textTransform: "none",
-												}}
-											>
-												<Building2 size={20} />
-												Modelo 2
-											</Button>
-										</Grid>
-									</Grid>
-								</Grid>
+								N
+							</text>
 
-								{/* Botón de Generar Distribución debajo */}
-								<Grid item>
-									<Button
-										onClick={calculateDistribution}
-										variant="contained"
-									>
-										Generar Distribución
-									</Button>
-									{distribution && !configurationSaved && (
-										<Grid>
-											<Button
-												variant="contained"
-												color="primary"
-												startIcon={
-													savingDistribution ||
-													savingPerimeters ? (
-														<CircularProgress
-															size={20}
-															color="inherit"
-														/>
-													) : (
-														<SaveIcon />
-													)
-												}
-												onClick={
-													handleSaveConfiguration
-												}
-												disabled={
-													savingDistribution ||
-													savingPerimeters ||
-													!distribution
-												}
-												sx={{ mt: 2 }}
-											>
-												{savingDistribution ||
-												savingPerimeters
-													? "Guardando Configuración..."
-													: "Guardar Configuración"}
-											</Button>
+							{/* Sur */}
+							<path
+								d="M 0,30 L -6,12 L 0,18 L 6,12 Z"
+								fill="#94a3b8"
+								stroke="#475569"
+								strokeWidth="1"
+							/>
+							<text
+								x="0"
+								y="38"
+								textAnchor="middle"
+								className="text-sm font-semibold"
+								fill="#64748b"
+							>
+								S
+							</text>
 
-											{/* Snackbar para mostrar resultado */}
-										</Grid>
-									)}
-									<Snackbar
-										open={saveStatus.open}
-										autoHideDuration={4000}
-										onClose={() =>
-											setSaveStatus({
-												...saveStatus,
-												open: false,
-											})
-										}
-										anchorOrigin={{
-											vertical: "top",
-											horizontal: "center",
-										}}
-									>
-										<Alert
-											severity={saveStatus.severity}
-											onClose={() =>
-												setSaveStatus({
-													...saveStatus,
-													open: false,
-												})
-											}
-											sx={{ width: "100%" }}
-										>
-											{saveStatus.message}
-										</Alert>
-									</Snackbar>
-								</Grid>
+							{/* Este y Oeste */}
+							<text
+								x="33"
+								y="5"
+								textAnchor="middle"
+								className="text-sm"
+								fill="#64748b"
+							>
+								E
+							</text>
+							<text
+								x="-33"
+								y="5"
+								textAnchor="middle"
+								className="text-sm"
+								fill="#64748b"
+							>
+								O
+							</text>
+
+							{/* Centro */}
+							<circle
+								cx="0"
+								cy="0"
+								r="3"
+								fill="#334155"
+							/>
+						</svg>
+					</div>
+					{distribution && (
+						<Paper
+							elevation={3}
+							sx={{
+								flexShrink: 0,
+								px: 1,
+								py: 1,
+								backgroundColor: "primary.50",
+								border: 2,
+								borderColor: "primary.main",
+								borderRadius: 2,
+								maxWidth: 130,
+							}}
+						>
+							<Box
+								sx={{
+									display: "flex",
+									alignItems: "center",
+									gap: 1,
+									mb: 0.5,
+								}}
+							>
+								{/* <ExploreIcon
+									sx={{
+										fontSize: 16,
+										color: "text.secondary",
+									}}
+								/> */}
+								<Typography
+									variant="caption"
+									sx={{
+										fontWeight: 500,
+										color: "text.secondary",
+										textTransform:
+											"uppercase",
+										letterSpacing: 0.5,
+									}}
+								>
+									Fachada Principal
+								</Typography>
+							</Box>
+
+							<Typography
+								variant="h6"
+								sx={{
+									fontWeight: 700,
+									color: "primary.main",
+									mb: 0.5,
+								}}
+							>
+								{(() => {
+									const angle =
+										maxRectangle.angle;
+									const normalizedAngle =
+										((angle % 360) + 360) %
+										360;
+
+									if (
+										normalizedAngle >=
+											337.5 ||
+										normalizedAngle < 22.5
+									)
+										return "Norte";
+									if (
+										normalizedAngle >=
+											22.5 &&
+										normalizedAngle < 67.5
+									)
+										return "Noreste";
+									if (
+										normalizedAngle >=
+											67.5 &&
+										normalizedAngle < 112.5
+									)
+										return "Este";
+									if (
+										normalizedAngle >=
+											112.5 &&
+										normalizedAngle < 157.5
+									)
+										return "Sureste";
+									if (
+										normalizedAngle >=
+											157.5 &&
+										normalizedAngle < 202.5
+									)
+										return "Sur";
+									if (
+										normalizedAngle >=
+											202.5 &&
+										normalizedAngle < 247.5
+									)
+										return "Suroeste";
+									if (
+										normalizedAngle >=
+											247.5 &&
+										normalizedAngle < 292.5
+									)
+										return "Oeste";
+									if (
+										normalizedAngle >=
+											292.5 &&
+										normalizedAngle < 337.5
+									)
+										return "Noroeste";
+									return "N/A";
+								})()}
+							</Typography>
+
+							<Typography
+								variant="body2"
+								sx={{
+									color: "text.secondary",
+									fontSize: "0.75rem",
+								}}
+							>
+								(
+								{Math.round(maxRectangle.angle)}
+								°)
+							</Typography>
+						</Paper>
+					)}
+				</div>
+						{/* Segunda columna - Botones */}
+				<div
+					style={{position: "absolute", top:10, right: 10, display: "flex", flexDirection: "column"}}
+				>
+					{/* Fila de botones Horizontal y Vertical */}
+					<Grid item>
+						<Grid container direction="row" spacing={0.4}>
+							<Grid item>
+								<Button
+									variant={
+										layoutMode === "horizontal"
+											? "contained"
+											: "outlined"
+									}
+									onClick={() =>
+										calculateDistributionModel("horizontal")
+									}
+									size="small"
+									sx={{
+										textTransform: "none",
+									}}
+								>
+									<Building2 size={20} />
+									Modelo 1
+								</Button>
+							</Grid>
+							<Grid item>
+								<Button
+									variant={
+										layoutMode === "vertical"
+											? "contained"
+											: "outlined"
+									}
+									onClick={() =>
+										calculateDistributionModel("vertical")
+									}
+									size="small"
+									sx={{
+										textTransform: "none",
+									}}
+								>
+									<Building2 size={20} />
+									Modelo 2
+								</Button>
 							</Grid>
 						</Grid>
 					</Grid>
-				)}
-			</div>
+					{/* Botón de Generar Distribución debajo */}
+					<Grid item>
+						{/* <Button
+							onClick={calculateDistribution}
+							variant="contained"
+						>
+							Generar Distribución
+						</Button> */}
+						{distribution && !configurationSaved && (
+							<Grid>
+								<Button
+									variant="contained"
+									color="primary"
+									startIcon={
+										savingDistribution ||
+										savingPerimeters ? (
+											<CircularProgress
+												size={20}
+												color="inherit"
+											/>
+										) : (
+											<SaveIcon />
+										)
+									}
+									onClick={
+										handleSaveConfiguration
+									}
+									disabled={
+										savingDistribution ||
+										savingPerimeters ||
+										!distribution
+									}
+									sx={{ mt: 2 }}
+								>
+									{savingDistribution ||
+									savingPerimeters
+										? "Guardando Configuración..."
+										: "Guardar Configuración"}
+								</Button>
+
+								{/* Snackbar para mostrar resultado */}
+							</Grid>
+						)}
+						<Snackbar
+							open={saveStatus.open}
+							autoHideDuration={4000}
+							onClose={() =>
+								setSaveStatus({
+									...saveStatus,
+									open: false,
+								})
+							}
+							anchorOrigin={{
+								vertical: "top",
+								horizontal: "center",
+							}}
+						>
+							<Alert
+								severity={saveStatus.severity}
+								onClose={() =>
+									setSaveStatus({
+										...saveStatus,
+										open: false,
+									})
+								}
+								sx={{ width: "100%" }}
+							>
+								{saveStatus.message}
+							</Alert>
+						</Snackbar>
+					</Grid>
+				</div>
 
 			<div className="border-2 border-slate-200 rounded-lg bg-slate-50 overflow-hidden relative">
 				<svg
 					width="100%"
-					height="800"
+					height={height}
 					viewBox="0 0 600 600"
 					className="bg-white cursor-grab active:cursor-grabbing"
 					onMouseDown={handleMouseDown}

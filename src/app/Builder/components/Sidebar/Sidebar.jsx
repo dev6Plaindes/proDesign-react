@@ -9,7 +9,7 @@ import {
 } from "@mui/material";
 import { ChevronDown, Home } from "lucide-react";
 
-export default function Sidebar({ state, school }) {
+export default function Sidebar({ state, school, ...props}) {
 	useEffect(() => {
 		Array.from(document.getElementsByClassName("sidebar-item")).forEach(
 			(el) => {
@@ -19,7 +19,7 @@ export default function Sidebar({ state, school }) {
 	}, []); // open
 
 	return (
-		<div className="sidebar" style={{ height: "100%" }}>
+		<div className="sidebar" {...props}>
 			<ul className="sidebar-list">
 				<li className="sidebar-item">
 					<span className="sidebar-anchor">

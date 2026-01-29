@@ -79,7 +79,10 @@ export const startLoginWithEmailPassword = (
 			//const { user } = res.data;
 			const { token, usuario } = data;
 			const { id, id_master, email, name, lastname } = usuario;
-
+			
+			localStorage.setItem("token", token);
+			console.log("token...", token);
+			
 			localStorage.setItem("SESS_ID", id_master);
 
 			//const { clientIP } = await geolocationService();

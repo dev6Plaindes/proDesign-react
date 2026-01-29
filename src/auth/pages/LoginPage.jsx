@@ -29,6 +29,8 @@ export const LoginPage = () => {
 	};
 
 	const onSubmit = (evt) => {
+		console.log("login...");
+		
 		evt.preventDefault();
 		var { email, password } = Object.fromEntries(new FormData(evt.target));
 		dispatch(startLoginWithEmailPassword(email, password, handleBackdrop));

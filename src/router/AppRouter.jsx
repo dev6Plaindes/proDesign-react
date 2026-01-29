@@ -10,7 +10,7 @@ import { School } from "../app/Builder/Plan3D/components/Pabellones/school-class
 import { toggleDoor, toggleWindow } from "../redux/projects/projectSlice";
 
 export const AppRouter = () => {
-	const { status, useCheckAuth } = useAuthStore();
+	const { status, checkAuth } = useAuthStore();
 	const dispatch = useDispatch();
 
 	useEffect(() => {
@@ -22,7 +22,7 @@ export const AppRouter = () => {
 			if (value === "window") dispatch(toggleWindow());
 		}
 
-		useCheckAuth();
+		checkAuth();
 	}, []);
 
 	if (status === "checking") return <CheckingAuth />;

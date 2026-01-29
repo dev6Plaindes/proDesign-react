@@ -43,7 +43,7 @@ import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter";
 import { OBJExporter } from "three/examples/jsm/exporters/OBJExporter.js";
 const UTM_SCALE_FACTOR = 1000;
 
-export default function Plan3D({ state, view, school, aspect }) {
+export default function Plan3D({ state, view, school, aspect, height }) {
 	const dispatch = useDispatch();
 	const { space, spaceEntrance } = useSelector((state) => state.distribution);
 
@@ -65,7 +65,7 @@ export default function Plan3D({ state, view, school, aspect }) {
 	) : (
 		//<FloorPlanX school={school} view={view} />
 		//<AppTest />
-		<TerrainPlanner school={school} state={state} />
+		<TerrainPlanner school={school} state={state} height={height}/>
 	);
 }
 function Aula({ position, name }) {
@@ -136,7 +136,7 @@ function App() {
 	const sceneRef = useRef();
 	console.log("ref", sceneRef.current.scene);
 	return (
-		<div style={{ height: "100vh" }}>
+		<div >
 			<Canvas ref={sceneRef}>
 				<ambientLight />
 				<directionalLight position={[10, 10, 5]} />
