@@ -40,6 +40,8 @@ export default function Pabellon({
 
 	const _floorsPeine2 = [];
 
+	console.log("spaceentrance:::::::", spaceEntrance);
+
 	const ordenarEnvironment = (environment, ambientesPorPiso) => {
 		const prioridadEntrada = [
 			"dirección administrativa",
@@ -120,14 +122,16 @@ export default function Pabellon({
 				bottomZ: VAR_BOTTOMZ,
 			},
 			5: {
-				top: -pabellonWidth + separationBase - 700,
-				bottom: pabellonWidth + separationBaseBot - 450,
-				topZ: -50,
+				//top: -pabellonWidth + separationBase - 700,
+				top: option === "A" ? -2000 : -600,
+				//bottom: pabellonWidth + separationBaseBot - 450,
+				//bottom: 0,
+				topZ: option === "A" ? -1650 : -800,
 				bottomZ: -900,
 			}, // jose carlos mariategui
 			6: {
 				top: -pabellonWidth + separationBase - 700,
-				bottom: pabellonWidth + separationBaseBot - 470,
+				//bottom: pabellonWidth + separationBaseBot - 470,
 				topZ: -50,
 				bottomZ: -100,
 			}, // jose carlos mariategui
@@ -143,7 +147,7 @@ export default function Pabellon({
 			11: { top: -1800, bottom: 3400, topZ: 300, bottomZ: 650 },
 			12: { top: -2150, bottom: 4350, topZ: 400, bottomZ: 950 }, // moyorarca
 			9: { top: -1850, bottom: 1800, topZ: -1300, bottomZ: 650 },
-			13: { top: -1800, bottom: 1600, topZ: 400, bottomZ: 650 },
+			13: { top: -1800, topZ: 400, bottomZ: 650 }, // Cesar Vallejo
 			14: {
 				top: -pabellonWidth + separationBase,
 				bottom: pabellonWidth + separationBaseBot,
@@ -157,6 +161,8 @@ export default function Pabellon({
 		const aulasLaterales =
 			_classrooms[0].classrooms.length +
 			_classrooms[0].ambientesExtra.length; // cambio de cantidad de aulas en top y botton
+
+		console.log("aulas laterales ::::sss::::", aulasLaterales);
 
 		const posX = posicionesPorAulas[aulasLaterales];
 
@@ -359,17 +365,17 @@ export default function Pabellon({
 					(element) =>
 						element.ambienteComplementario === "Aula para EPT" ||
 						element.ambienteComplementario ===
-							"Sala de Usos Múltiples (SUM)" ||
-						element.ambienteComplementario === "Comedor" ||
-						element.ambienteComplementario === "Cocina escolar"
+							"Sala de Usos Múltiples (SUM)" //||
+					// element.ambienteComplementario === "Comedor" ||
+					// element.ambienteComplementario === "Cocina escolar"
 				)
 				.sort((a, b) => {
 					// Orden: EPT > SUM > Comedor > Cocina
 					const orden = {
 						"Aula para EPT": 1,
 						"Sala de Usos Múltiples (SUM)": 2,
-						Comedor: 3,
-						"Cocina escolar": 4,
+						// Comedor: 3,
+						// "Cocina escolar": 4,
 					};
 					return (
 						orden[a.ambienteComplementario] -
@@ -412,30 +418,114 @@ export default function Pabellon({
 			createMid(totalEnvironment);
 		}
 
-		let midTopX;
-		let midBottomX;
-		let midTop3D;
-		let midTopZ3D;
-		let midBottom3D;
-		let midBottomZ3D;
-		let midBottomZ;
-		if (spaceEntrance < 80) {
-			midTopX = -1500;
-			midBottomX = 750; //700
-			midTop3D = option === "A" ? -1350 : -1500; //1150
-			midBottom3D = option === "A" ? 900 : 700;
-			midBottomZ = 0;
-			midTopZ3D = option === "A" ? 300 : -400;
-			midBottomZ3D = option === "A" ? 600 : 0;
-		} else {
-			midTopX = -1100;
-			midBottomX = 2000;
-			midTop3D = -1400;
-			midBottom3D = option === "A" ? 1000 : 2300;
-			midBottomZ = 300;
-			midTopZ3D = -100;
-			midBottomZ3D = option === "A" ? 400 : 250;
-		}
+		// let midTopX;
+		// let midTopZ;
+		// let midBottomX;
+		// let midTop3D;
+		// let midTopZ3D;
+		// let midBottom3D;
+		// let midBottomZ3D;
+		// let midBottomZ;
+		// if (spaceEntrance < 80) {
+		// 	midTopX = option === "A" ? -1500 : -500;
+		// 	midBottomX = option === "A" ? 500 : 850; //700
+		// 	midTop3D = option === "A" ? -1350 : -1500; //1150
+		// 	midBottom3D = option === "A" ? 900 : 700;
+		// 	midTopZ = option === "A" ? -2500 : -1200;
+		// 	midBottomZ = -1800;
+		// 	midTopZ3D = option === "A" ? -2300 : -400;
+		// 	midBottomZ3D = option === "A" ? -1700 : 0;
+		// } else {
+		// 	(midTopZ = 0), (midTopX = -1500);
+		// 	midBottomX = option === "A" ? 900 : 1700; //900
+		// 	midTop3D = -1400;
+		// 	midBottom3D = option === "A" ? 1000 : 2300;
+		// 	midBottomZ = 500;
+		// 	midTopZ3D = -100;
+		// 	midBottomZ3D = option === "A" ? 400 : 250;
+		// }
+		const getConfig = (spaceEntrance, option) => {
+			// Configuración base para spaceEntrance >= 80
+			if (spaceEntrance >= 80) {
+				return (
+					{
+						A: {
+							midTopX: -1500,
+							midBottomX: 900,
+							midTop3D: -1350,
+							midBottom3D: 1000,
+							midTopZ: 0, // valor para >= 80
+							midBottomZ: 500,
+							midTopZ3D: -100,
+							midBottomZ3D: 400,
+						},
+						B: {
+							midTopX: -1500,
+							midBottomX: 300, //1700
+							midTop3D: -1500,
+							midBottom3D: 2300,
+							midTopZ: 0,
+							midBottomZ: 500,
+							midTopZ3D: -100,
+							midBottomZ3D: 250,
+						},
+					}[option] || null
+				);
+			}
+
+			// Para spaceEntrance < 80, empezamos con valores base
+			const baseConfig = {
+				A: {
+					midTopX: -1500,
+					midBottomX: 500,
+					midTop3D: -1350,
+					midBottom3D: 900,
+					midTopZ: -2500, // valor base original 2500
+					midBottomZ: -1800,
+					midTopZ3D: -2300,
+					midBottomZ3D: -1700,
+				},
+				B: {
+					midTopX: -500,
+					midBottomX: 850,
+					midTop3D: -1500,
+					midBottom3D: 700,
+					midTopZ: -1200,
+					midBottomZ: -1800,
+					midTopZ3D: -400,
+					midBottomZ3D: 0,
+				},
+			};
+
+			const config = { ...baseConfig[option] };
+
+			// Aplicar ajustes específicos según rangos
+			if (option === "A") {
+				if (spaceEntrance < 62) {
+					config.midTopZ = -1900; // Valor específico para < 62 // -2500
+				} else if (spaceEntrance >= 70 && spaceEntrance <= 79) {
+					config.midTopZ = -300; // Valor específico para 70-79
+					config.midBottomX = 4600;
+					config.midBottomZ = 100;
+				}
+				// Entre 62-69 mantiene el valor base (-2500)
+			}
+
+			return config;
+		};
+
+		// Uso
+		const config = getConfig(spaceEntrance, option);
+		const {
+			midTopX,
+			midBottomX,
+			midTop3D,
+			midBottom3D,
+			midTopZ,
+			midBottomZ,
+			midTopZ3D,
+			midBottomZ3D,
+		} = config;
 
 		_floorsPeine2.push({
 			sides: [
@@ -457,9 +547,9 @@ export default function Pabellon({
 						view.view === "3D"
 							? [midTop3D, posY, midTopZ3D]
 							: option === "A"
-							? [-1500, posY, 0]
+							? [midTopX, posY, midTopZ]
 							: //: [-500, posY, 400],
-							  [midTopX, posY, -100],
+							  [midTopX, posY, midTopZ],
 				},
 				{
 					side: "midBottom",
@@ -468,7 +558,7 @@ export default function Pabellon({
 						view.view === "3D"
 							? [midBottom3D, posY, midBottomZ3D]
 							: option === "A"
-							? [900, posY, 500]
+							? [midBottomX, posY, midBottomZ]
 							: //[450, posY, -300] -------> falta buscar parametros
 							  //: [1600, posY, 400], // ejemplo 1 ---> x:400 , y:400
 							  [midBottomX, posY, midBottomZ],
@@ -566,7 +656,7 @@ export default function Pabellon({
 		// SIDE 1
 		for (let i = 0; i < side1; i++) {
 			const nombreAula = data.classrooms[classroomIndex];
-			console.log("nombre aulas", nombreAula);
+
 			const esAmbienteComplementario =
 				ambientesComplementarios.includes(nombreAula);
 

@@ -1,7 +1,15 @@
 import { useEffect } from "react";
 import "./styles.css";
+import {
+	Accordion,
+	AccordionDetails,
+	AccordionSummary,
+	Box,
+	Typography,
+} from "@mui/material";
+import { ChevronDown, Home } from "lucide-react";
 
-export default function Sidebar({ state, school }) {
+export default function Sidebar({ state, school, ...props}) {
 	useEffect(() => {
 		Array.from(document.getElementsByClassName("sidebar-item")).forEach(
 			(el) => {
@@ -11,12 +19,14 @@ export default function Sidebar({ state, school }) {
 	}, []); // open
 
 	return (
-		<div className="sidebar" style={{ height: "100%" }}>
+		<div className="sidebar" {...props}>
 			<ul className="sidebar-list">
 				<li className="sidebar-item">
-					<span className="sidebar-anchor">Proyecto </span>
+					<span className="sidebar-anchor">
+						Informacion del Proyecto{" "}
+					</span>
 					<p style={{ marginTop: ".4rem" }}>Nombre: {state.name}</p>
-					<p>Versión: VERSIÓN 1: HOME</p>
+					<p>Versión: VERSIÓN 1</p>
 					<p>Zona: {state.zone}</p>
 					<p>
 						Niveles:&nbsp;
@@ -26,41 +36,152 @@ export default function Sidebar({ state, school }) {
 						}).format(state.level)}
 					</p>
 					<p>Tipo: {state.sublevel}</p>
-					<p>Aforo maximo: {school.maxCapacity}</p>
+					<p>Aforo Estudiantil: {school.maxCapacity}</p>
 				</li>
 				<li className="sidebar-item">
-					{/* <a href="#" className="sidebar-anchor">Terreno: </a> */}
 					<span className="sidebar-anchor">Terreno </span>
 					<p>
 						Area total: {school.totalArea}m
 						<span style={{ fontSize: "1.5rem" }}>²</span>
 					</p>
-					<p>Area parcial: {school.partialArea}m</p>
+					<p>Perimetro: 5345m</p>
+				</li>
+				<li className="sidebar-item">
+					<span className="sidebar-anchor">Area Disponible</span>
+					<p style={{ marginTop: "10px" }}>
+						Area : {school.generalArea}m
+					</p>
+					<p>Perimetro : 3500m</p>
 					<p>Ancho: {school.width}m</p>
 					<p>Largo: {school.length}m</p>
-
-					{/* <p>Area parcial: {school.partialArea}</p>
-					<p>Circulación: {Math.ceil(school.circulationArea)}</p>
-					<p>
-						Area general: {school.generalArea}m
-						<span style={{fontSize: "1.5rem"}}>²</span>
-					</p> */}
 				</li>
 				<li className="sidebar-item">
 					{/* <a href="#" className="sidebar-anchor">Cantidad: </a> */}
-					<span className="sidebar-anchor">Cantidad </span>
-					<p style={{ marginTop: ".4rem" }}>
-						# Aulas: {school.numberOfClassrooms.getTotal()}
-					</p>
-					<p># Baños: {school.bathrooms.length}</p>
+					<span className="sidebar-anchor">Cantidad</span>
+					<Accordion
+						sx={{
+							boxShadow: "none",
+							"&:before": { display: "none" },
+							backgroundColor: "transparent",
+						}}
+					>
+						<AccordionSummary
+							expandIcon={<ChevronDown />}
+							sx={{
+								padding: 0,
+								minHeight: "auto",
+								"& .MuiAccordionSummary-content": {
+									margin: "8px 0",
+									display: "flex",
+									alignItems: "center",
+									gap: 1,
+								},
+							}}
+						>
+							{/* <SchoolIcon
+								sx={{ fontSize: 20, color: "primary.main" }}
+							/> */}
+							<Typography
+								variant="body3"
+								sx={{ fontWeight: 600 }}
+							>
+								Aulas: {school.numberOfClassrooms.getTotal()}
+							</Typography>
+						</AccordionSummary>
+
+						<AccordionDetails sx={{ padding: "0 0 0 5px" }}>
+							<Box
+								sx={{
+									display: "flex",
+									flexDirection: "column",
+									gap: 0.5,
+								}}
+							>
+								<Typography
+									variant="body2"
+									sx={{ color: "text.secondary" }}
+								>
+									📚 Inicial:{" "}
+									{school.numberOfClassrooms.inicial}
+								</Typography>
+								<Typography
+									variant="body2"
+									sx={{ color: "text.secondary" }}
+								>
+									📘 Primaria:{" "}
+									{school.numberOfClassrooms.primaria}
+								</Typography>
+								<Typography
+									variant="body2"
+									sx={{ color: "text.secondary" }}
+								>
+									📕 Secundaria:{" "}
+									{school.numberOfClassrooms.secundaria}
+								</Typography>
+							</Box>
+						</AccordionDetails>
+					</Accordion>
+					<p>Baños : {school.bathrooms.length}</p>
+					<Accordion
+						sx={{
+							boxShadow: "none",
+							"&:before": { display: "none" },
+							backgroundColor: "transparent",
+						}}
+					>
+						<AccordionSummary
+							expandIcon={<ChevronDown />}
+							sx={{
+								padding: 0,
+								minHeight: "auto",
+								"& .MuiAccordionSummary-content": {
+									margin: "4px 0",
+									display: "flex",
+									alignItems: "center",
+									gap: 1,
+								},
+							}}
+						>
+							{/* <SchoolIcon
+								sx={{ fontSize: 20, color: "primary.main" }}
+							/> */}
+							<Typography
+								variant="body3"
+								sx={{ fontWeight: 600 }}
+							>
+								Ambientes :{" "}
+								{school.complementaryEnvironment.length}
+							</Typography>
+						</AccordionSummary>
+
+						<AccordionDetails sx={{ padding: "0 0 0 5px" }}>
+							{school.complementaryEnvironment.map((ambiente) => (
+								<Box
+									sx={{
+										display: "flex",
+										flexDirection: "column",
+										gap: 10.5,
+									}}
+								>
+									<Typography
+										variant="body3"
+										sx={{ color: "text.secondary" }}
+									>
+										<Home sx={{}}/>{" "}
+										{ambiente.ambienteComplementario}
+									</Typography>
+								</Box>
+							))}
+						</AccordionDetails>
+					</Accordion>
 				</li>
-				<li className="sidebar-item">
-					{/* <a href="#" className="sidebar-anchor">Medidas de Aula</a> */}
+				{/* <li className="sidebar-item">
+				
 					<span className="sidebar-anchor">Medidas del Aula</span>
 					<p>Columna: 0.25m</p>
 					<p>Largo: 8m</p>
 					<p>Ancho: 7.2m</p>
-				</li>
+				</li> */}
 			</ul>
 		</div>
 	);

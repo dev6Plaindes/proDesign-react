@@ -46,7 +46,7 @@ export function CostsPage({ school }) {
 
 		return handleSlot("dashboard");
 	}, [projects, projectID]);
-
+	console.log("slottt:", slot);
 	return (
 		<Grid container spacing={{ xs: 1.5, sm: 2 }}>
 			<Grid

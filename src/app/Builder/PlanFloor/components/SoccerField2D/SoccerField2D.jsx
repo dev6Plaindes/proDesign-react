@@ -8,21 +8,21 @@ export default function SoccerField2D({
 	rotation,
 	length,
 	width,
-	lengthSoccer,
+	partialArea,
 }) {
-	console.log(position, rotation, length, width);
+	//console.log(position, rotation, length, width);
 
 	const floor = useSelector((state) => state.building.floor1);
-	const numeroAulas = lengthSoccer / 8;
 
 	let half_length = 0;
-	if (numeroAulas === 4) {
-		half_length = 800 / 2;
+	let half_width = 0;
+	if (partialArea < 5000) {
+		half_length = length / 2.5;
+		half_width = width / 2.5;
 	} else {
 		half_length = length / 2;
+		half_width = width / 2;
 	}
-
-	const half_width = width / 2;
 
 	const shape = new Shape();
 	shape.moveTo(-half_length, -half_width);
@@ -44,17 +44,12 @@ export default function SoccerField2D({
 
 	const geo = new BufferGeometry().setFromPoints(vertice.getPoints());
 
-	let positionEspecial;
-	if (numeroAulas < 8) {
-		positionEspecial = [500, 0, 800];
-	}
-
 	return (
 		<group position={position} rotation={rotation} visible={floor}>
-			<mesh>
+			{/* <mesh>
 				<planeGeometry args={[length, width]} />
 				<meshStandardMaterial wireframe />
-			</mesh>
+			</mesh> */}
 
 			<line>
 				<shapeGeometry args={[shape]} />

@@ -6,10 +6,16 @@ import { Formik, Form, Field, useField } from "formik";
 import {
 	Chart,
 	ScatterController,
+	LineController,
 	LinearScale,
 	PointElement,
 	LineElement,
+	Title,
+	Tooltip,
+	Legend,
+	Filler,
 } from "chart.js";
+
 import React from "react";
 import Button from "@mui/material/Button";
 import Box from "@mui/system/Box";
@@ -21,11 +27,11 @@ import LinearProgress from "@mui/material/LinearProgress";
 import Grid from "@mui/material/Grid";
 import Typography from "@mui/material/Typography";
 import Modal from "@mui/material/Modal";
-import Input from "@mui/material/Input";
+
 import Radio from "@mui/material/Radio";
 import RadioGroup from "@mui/material/RadioGroup";
 import { UpperLowerCase } from "../../../utils/utils";
-import { RowForm } from "./RowForm";
+
 import * as yup from "yup";
 import { RowFormAC } from "./RowFormAC";
 import { request } from "../../../utils/arqPlataformAxios";
@@ -33,25 +39,44 @@ import {
 	readMatrizExcel,
 	updateProjectExcelService,
 } from "../../../services/spreadsheetService";
-import HighlightOffIcon from "@mui/icons-material/HighlightOff";
+
 import {
 	createProjectService,
 	updateProjectService,
 } from "../../../services/projectsService";
 import { addProject, setProjects } from "../../../redux/projects/projectSlice";
 import { createThumbnail } from "./createThumbnail";
-import Preview3D from "../../Builder/Plan3D/Preview3D";
+
 import * as XLSX from "xlsx";
 import TerrainDataTable from "./TerrainDataTable";
-import BestTerrain from "../GridData/BestTerrain";
 
 import MaxRectangle from "../GridData/MaxRectangle";
-import { Dialog, DialogContent, DialogTitle, TextField } from "@mui/material";
-import AreaMaxRectangle from "../AreaData/AreaMaxRectangle";
-import MaxRectangleWithPriority from "../GridData/MaxRectangleWithPriority";
-import { mapFormDataToExcel } from "../../../utils/excelMapping";
+import {
+	Dialog,
+	DialogContent,
+	DialogTitle,
+	Stack,
+	Card,
+	CardContent,
+	Paper,
+	Chip,
+} from "@mui/material";
 
-Chart.register(ScatterController, LinearScale, PointElement, LineElement);
+import { mapFormDataToExcel } from "../../../utils/excelMapping";
+import { setAmbienceData } from "../../../redux/distribution/ambienceSlice";
+import { height, width } from "@mui/system";
+import axios from "axios";
+Chart.register(
+	ScatterController,
+	LineController,
+	LinearScale,
+	PointElement,
+	LineElement,
+	Title,
+	Tooltip,
+	Legend,
+	Filler
+);
 
 const NewProjectForm = forwardRef(
 	({ data, handleClose, handleShow, school }, ref) => {
@@ -116,15 +141,17 @@ const NewProjectForm = forwardRef(
 		const [verticesGrafic, setVerticesGrafic] = useState([]);
 		const [maximumRectangle, setMaximumRectangle] = useState([]);
 		const [loading, setLoading] = useState(false);
-		const [showShart, setShowShart] = useState(false);
 		const [showButtonTerrain, setShowButtonTerrain] = useState(true);
 		const [exclutedVertices, setExclutedVertices] = useState([]);
 		const [priorityVertices, setPriorityVertices] = useState([]);
 		const [openDialog, setOpenDialog] = useState(false);
 		const [openDialogMax, setOpenDialogMax] = useState(false);
 		const [openDialogPriority, setOpenDialogPriority] = useState(false);
+		const [departamentos, setDepartamentos] = useState([]);
+		const [provincias, setProvincias] = useState([]);
+		const [distritos, setDistritos] = useState([]);
+		const [allData, setAllData] = useState(null);
 		const navigate = useNavigate();
-		//CONTROLADOR PARA ABRIR EL MODAL DE AREA DEL TERRENO
 
 		//console.log("esto es dataexcel", dataExcel);
 		const handleClickOpenDialog = () => {
@@ -175,10 +202,31 @@ const NewProjectForm = forwardRef(
 			return () => handleShow({ show: true });
 		}, []);
 
+		useEffect(() => {
+			const fetchData = async () => {
+				try {
+					const response = await axios.get(
+						"https://free.e-api.net.pe/ubigeos.json"
+					);
+					setAllData(response.data);
+
+					//Extraer departamentos únicos
+					const depts = Object.keys(response.data).sort();
+					setDepartamentos(depts);
+				} catch (error) {
+					console.error("Error fetching ubigeos:", error);
+				}
+			};
+
+			fetchData();
+		}, []);
+
 		const initialValues = {
 			name: "",
-			tipologia: data?.tipologia || "",
+			tipologia: "Educacion",
 			ubication: data?.ubication || "",
+			departamento: data?.departamento || "",
+			provincia: data?.provincia || "",
 			distrito: data?.distrito || "",
 			client: data?.client || "",
 			manager: data?.manager || "",
@@ -206,20 +254,18 @@ const NewProjectForm = forwardRef(
 		// Obtener la tipologia,
 		const typology = [
 			{
-				name: "Educativa",
+				name: "Educacion",
 			},
 			{
 				name: "Salud",
 			},
 			{
-				name: "Deporte",
+				name: "Vial",
 			},
 			{
-				name: "Cultura",
+				name: "Riego",
 			},
-			{
-				name: "Diversion",
-			},
+
 			{
 				name: "Otros",
 			},
@@ -348,6 +394,7 @@ const NewProjectForm = forwardRef(
 
 			const res = await readMatrizExcel(file, data); // servicio de la hoja de calculo
 			setDataExcel(res.data);
+			console.log("datos del excel :: ", res.data);
 			setTableAforo(true);
 			handleToggleLoading();
 			return { error: false, message: "" };
@@ -361,11 +408,17 @@ const NewProjectForm = forwardRef(
 			aulaSecundaria && levels.push("Secundaria");
 
 			const verticesArray = vertices.map(({ x, y }) => [x, y]);
+			// const verticesMaximumRectangle = {
+			// 	vertices: maximumRectangle.vertices,
+			// 	ancho: maximumRectangle.ancho,
+			// 	alto: maximumRectangle.alto,
+			// 	area: maximumRectangle.area,
+			// };
 			const verticesMaximumRectangle = maximumRectangle.vertices;
-			const angleMaximumRectangle = maximumRectangle.angulo;
-			const verticesRectangleArray = verticesMaximumRectangle.slice(
-				0,
-				-1
+			const angleMaximumRectangle = maximumRectangle.anguloGrados;
+			const availableVertices = verticesArray.filter(
+				([x, y]) =>
+					!exclutedVertices.some(([vx, vy]) => vx === x && vy === y)
 			);
 
 			const dataComplete = {
@@ -378,22 +431,29 @@ const NewProjectForm = forwardRef(
 				toilets_per_student: JSON.stringify(
 					dataExcel.toilets_per_student
 				),
-
+				width: maximumRectangle.ancho,
+				height: maximumRectangle.alto,
+				//area: maximumRectangle.area,
 				number_floors: numberFloors,
 				stairs: JSON.stringify(dataExcel.stairs),
-				ubication: values.ubication,
+				//ubication: values.ubication,
+				// departamento: values.departamento,
+				// distrito: values.distrito,
+				// provincia: values.provincia,
 				level: JSON.stringify(levels),
 				puntos: JSON.stringify(rows),
 				aforo: JSON.stringify(allDataAforo),
 				ambientes: rowsAC,
 				sublevel: tipo,
 				vertices: verticesArray,
-				vertices_rectangle: verticesRectangleArray,
+				vertices_rectangle: verticesMaximumRectangle,
 				angle: angleMaximumRectangle,
-				coordenadas: document.getElementById("coordenadas").value,
+				//coordenadas: document.getElementById("coordenadas").value,
 				user_id: id,
 				type_id: plantillas?.id,
 			};
+
+			console.log("dataComplete", dataComplete);
 
 			const projectExcelData = mapFormDataToExcel({
 				dataExcel,
@@ -404,6 +464,62 @@ const NewProjectForm = forwardRef(
 			});
 
 			console.log("📊 Datos a enviar al Excel:", projectExcelData);
+			const {
+				aula_psicomotricidad,
+				aulas_inicial_ciclo1,
+				aulas_inicial_ciclo2,
+				aulas_primaria,
+				aulas_secundaria,
+				biblioteca,
+				canchas_deportivas,
+				cocina,
+				depositos,
+				direccion_admin,
+				laboratorio,
+				lactario,
+				quiosco,
+				innovacion_primaria,
+				innovacion_secundaria,
+				sala_profesores,
+				sala_reuniones,
+				sshh_admin,
+				sshh_cocina,
+				sum_inicial,
+				sum_prim_sec,
+				taller_creativo_primaria,
+				taller_creativo_secundaria,
+				taller_ept,
+				topico,
+			} = projectExcelData;
+			dispatch(
+				setAmbienceData({
+					aula_psicomotricidad,
+					aulas_inicial_ciclo1,
+					aulas_inicial_ciclo2,
+					aulas_primaria,
+					aulas_secundaria,
+					biblioteca,
+					canchas_deportivas,
+					cocina,
+					depositos,
+					direccion_admin,
+					laboratorio,
+					lactario,
+					quiosco,
+					innovacion_primaria,
+					innovacion_secundaria,
+					sala_profesores,
+					sala_reuniones,
+					sshh_admin,
+					sshh_cocina,
+					sum_inicial,
+					sum_prim_sec,
+					taller_creativo_primaria,
+					taller_creativo_secundaria,
+					taller_ept,
+					topico,
+				})
+			);
 
 			// ========================================
 			// PASO 3: Actualizar el Excel del backend
@@ -554,7 +670,43 @@ const NewProjectForm = forwardRef(
 						validationSchema={validationSchema}
 						innerRef={ref}
 					>
-						{({ errors, touched, ...rest }) => {
+						{({ errors, touched, values, setFieldValue }) => {
+							const handleDepartamentoChange = (e) => {
+								const dept = e.target.value;
+								setFieldValue("departamento", dept);
+								setFieldValue("ubication", "");
+								setFieldValue("distrito", "");
+								setDistritos([]);
+
+								if (allData && allData[dept]) {
+									const provs = Object.keys(
+										allData[dept]
+									).sort();
+									setProvincias(provs);
+								} else {
+									setProvincias([]);
+								}
+							};
+
+							// Handler para provincia
+							const handleProvinciaChange = (e) => {
+								const prov = e.target.value;
+								setFieldValue("ubication", prov);
+								setFieldValue("distrito", "");
+
+								if (
+									allData &&
+									allData[values.departamento] &&
+									allData[values.departamento][prov]
+								) {
+									const dists = Object.keys(
+										allData[values.departamento][prov]
+									).sort();
+									setDistritos(dists);
+								} else {
+									setDistritos([]);
+								}
+							};
 							return (
 								<Form>
 									<Grid container spacing={{ xs: 2, sm: 3 }}>
@@ -979,13 +1131,13 @@ const NewProjectForm = forwardRef(
 																	display:
 																		"flex",
 																	justifyContent:
-																		"center",
-																	gap: 4,
+																		"space-around",
+																	gap: 1,
 																}}
 															>
 																{/* BOTON GENERACION DEL TERRENO */}
 																<Button
-																	color="warning"
+																	color="primary"
 																	variant="contained"
 																	onClick={
 																		handleClickOpenDialog
@@ -999,7 +1151,7 @@ const NewProjectForm = forwardRef(
 																</Button>
 																{/* BOTON GENERACION DEL CUADRANTE MAXIMO */}
 																<Button
-																	color="secondary"
+																	color="warning"
 																	variant="contained"
 																	onClick={
 																		handleClickOpenDialogMax
@@ -1009,16 +1161,6 @@ const NewProjectForm = forwardRef(
 																	del
 																	cuadrante
 																	maximo
-																</Button>
-																<Button
-																	variant="contained"
-																	onClick={
-																		handleClickOpenDialogPriority
-																	}
-																>
-																	Cuadrante
-																	maximo
-																	prioridades
 																</Button>
 															</Grid>
 														)}
@@ -1126,18 +1268,16 @@ const NewProjectForm = forwardRef(
 														)}
 													</Select>
 												</Grid>
-												<Grid item xs={6}>
+
+												{/* Encabezado - ahora ocupa todo el ancho */}
+												<Grid item xs={12}>
 													<span>
 														{!!rowsAC.length &&
 															"AMBIENTES COMPLEMENTARIOS"}
 													</span>
 												</Grid>
-												<Grid item xs={6}>
-													<span>
-														{!!rowsAC.length &&
-															"AFORO MAXIMO"}
-													</span>
-												</Grid>
+
+												{/* Filas de ambientes */}
 												{rowsAC.map((row, index) => (
 													<RowFormAC
 														{...row}
@@ -1164,36 +1304,75 @@ const NewProjectForm = forwardRef(
 										</Grid>
 
 										<Grid item xs={12} sm={6}>
-											<span>PROVINCIA:</span>
-											<Field
+											<span>DEPARTAMENTO:</span>
+
+											<Select
+												//label="Departamento"
+												name="departamento"
 												style={styleInput}
-												type="text"
-												name="ubication"
-											/>
-											{errors.ubication &&
-											touched.ubication ? (
-												<div style={styleError}>
-													{errors.ubication}
-												</div>
-											) : null}
-											{/* <ErrorMessage name="email" component="div" /> */}
+												onChange={
+													handleDepartamentoChange
+												}
+											>
+												<option value="">
+													Seleccione un departamento
+												</option>
+												{departamentos.map((dept) => (
+													<option
+														key={dept}
+														value={dept}
+													>
+														{dept}
+													</option>
+												))}
+											</Select>
 										</Grid>
 
 										<Grid item xs={12} sm={6}>
-											<span>DISTRITO:</span>
-											<Field
+											<span>PROVINCIA:</span>
+
+											<Select
+												//label="Provincia"
+												name="ubication"
+												onChange={handleProvinciaChange}
+												disabled={!values.departamento}
 												style={styleInput}
-												type="text"
-												name="distrito"
-											/>
-											{errors.distrito &&
-											touched.distrito ? (
-												<div style={styleError}>
-													{errors.distrito}
-												</div>
-											) : null}
+											>
+												<option value="">
+													Seleccione una provincia
+												</option>
+												{provincias.map((prov) => (
+													<option
+														key={prov}
+														value={prov}
+													>
+														{prov}
+													</option>
+												))}
+											</Select>
 
 											{/* <ErrorMessage name="email" component="div" /> */}
+										</Grid>
+										<Grid item xs={12} sm={6}>
+											<span>DISTRITO:</span>
+											<Select
+												//label="Distrito"
+												name="distrito"
+												disabled={!values.ubication}
+												style={styleInput}
+											>
+												<option value="">
+													Seleccione un distrito
+												</option>
+												{distritos.map((dist) => (
+													<option
+														key={dist}
+														value={dist}
+													>
+														{dist}
+													</option>
+												))}
+											</Select>
 										</Grid>
 
 										<Grid item xs={12} sm={6}>
@@ -1227,79 +1406,48 @@ const NewProjectForm = forwardRef(
 											{/* <ErrorMessage name="email" component="div" /> */}
 										</Grid>
 
-										<MapCoordinates data={data} />
+										{/* <MapCoordinates data={data} /> */}
 									</Grid>
 								</Form>
 							);
 						}}
 					</Formik>
 				)}
-				{step === 2 && (
-					<>
-						<div style={{ padding: "3rem 5rem" }}>
-							<div style={{ minWidth: 300 }}>
-								<img
-									src={`/images/${imageToAulas(
-										aforoInicial,
-										aforoPrimaria,
-										aforoSecundaria
-									)}`}
-									alt="img"
-									style={{ width: "100%" }}
-								/>
-							</div>
-						</div>
-						<div
-							style={{
-								width: "450px",
-								height: "300px",
-								position: "absolute",
-								visibility: "hidden",
-							}}
-						>
-							<Preview3D
-								school={school}
-								state={createdProject}
-								isNew
-							/>
-						</div>
-					</>
-				)}
 			</>
 		);
 	}
 );
 
-function MapCoordinates({ data }) {
-	const [coordenadas, setCoordenadas] = useState(data?.coordenadas || "");
+// function MapCoordinates({ data }) {
+// 	const [coordenadas, setCoordenadas] = useState(data?.coordenadas || "");
 
-	return (
-		<>
-			<Grid item xs={12}>
-				<iframe
-					src={`https://maps.google.com/?ll=${coordenadas}&z=16&t=m&output=embed`}
-					height="100%"
-					width="100%"
-					style={{ border: 0 }}
-					allowFullScreen
-				/>
-			</Grid>
+// 	return (
+// 		<>
+// 			<Grid item xs={12}>
+// 				<iframe
+// 					src={`https://maps.google.com/?ll=${coordenadas}&z=16&t=m&output=embed`}
+// 					height="100%"
+// 					width="100%"
+// 					style={{ border: 0 }}
+// 					allowFullScreen
+// 				/>
+// 			</Grid>
 
-			<Grid item xs={12}>
-				<span>Coordenadas:</span>
-				<Field
-					id="coordenadas"
-					style={styleInput}
-					type="text"
-					value={coordenadas}
-					onChange={(e) => setCoordenadas(e.target.value)}
-					name="coordenadas"
-					required
-				/>
-			</Grid>
-		</>
-	);
-}
+// 			<Grid item xs={12}>
+// 				<span>Coordenadas:</span>
+// 				<Field
+// 					id="coordenadas"
+// 					style={styleInput}
+// 					type="text"
+// 					value={coordenadas}
+// 					onChange={(e) => setCoordenadas(e.target.value)}
+// 					name="coordenadas"
+// 					required
+// 				/>
+// 			</Grid>
+// 		</>
+// 	);
+// }
 
 const nivelGrid = (label, aforo, aula) => {
 	return (
@@ -1380,7 +1528,7 @@ const ambientesComplementarios = [
 		ambienteComplementario: "Sala de Usos Múltiples (SUM)",
 	},
 	//{ capacidad: 0, ambienteComplementario: "Aula para EPT" },
-	{ capacidad: 0, ambienteComplementario: "Taller creativo" },
+
 	//{ capacidad: 0, ambienteComplementario: "Area de ingreso" },
 	{ capacidad: 0, ambienteComplementario: "Cocina escolar" },
 	{ capacidad: 0, ambienteComplementario: "Comedor" },
@@ -1389,11 +1537,8 @@ const ambientesComplementarios = [
 	// 	ambienteComplementario:
 	// 		"Servicios higiénicos para personal administrativo y docentes",
 	// },
-	{
-		capacidad: 0,
-		ambienteComplementario: "Almacén general / Depósito de materiales",
-	},
-	{ capacidad: 0, ambienteComplementario: "Cuarto de limpieza" },
+
+	{ capacidad: 0, ambienteComplementario: "Sala de Psicomotricidad" },
 	{ capacidad: 0, ambienteComplementario: "Dirección administrativa" },
 	{ capacidad: 0, ambienteComplementario: "Sala de maestros" },
 	{ capacidad: 0, ambienteComplementario: "Patio Inicial" },
@@ -1407,7 +1552,7 @@ const ambientesComplementarios = [
 const ambientesDefault = [
 	{ capacidad: 0, ambienteComplementario: "Biblioteca escolar" },
 	//{ capacidad: 0, ambienteComplementario: "Laboratorio de Ciencias" },
-	{ capacidad: 0, ambienteComplementario: "Sala de Psicomotricidad" },
+	{ capacidad: 0, ambienteComplementario: "Taller creativo" },
 	{ capacidad: 0, ambienteComplementario: "Taller EPT" },
 ];
 
@@ -1800,52 +1945,391 @@ const PoligonoChart = ({ verticesTotal, verticesExcluted }) => {
 	return <canvas ref={chartRef} />;
 };
 //COMPONENTE GENERACION DEL CUADRANTE MAXIMO
+// const RectangleChart = ({
+// 	verDispo,
+// 	verticesExcluted,
+// 	setMaximumRectangle,
+// 	close,
+// }) => {
+// 	const chartRefs = [useRef(null), useRef(null), useRef(null)];
+// 	const chartInstances = [useRef(null), useRef(null), useRef(null)];
+
+// 	const [selectedOption, setSelectedOption] = useState(0);
+// 	const [rectangulosData, setRectangulosData] = useState([]);
+
+// 	// Filtrar vértices excluidos
+// 	const availableVertices = verDispo.filter(
+// 		([x, y]) => !verticesExcluted.some(([vx, vy]) => vx === x && vy === y)
+// 	);
+
+// 	useEffect(() => {
+// 		const calcularRectangulos = async () => {
+// 			// Convertir availableVertices de [x, y] a {east, north}
+
+// 			const opciones = await MaxRectangle(availableVertices);
+// 			console.log("Opciones recibidas:", opciones);
+// 			setRectangulosData(opciones);
+// 		};
+
+// 		if (availableVertices.length > 0) {
+// 			calcularRectangulos();
+// 		}
+// 	}, [availableVertices.length]); // Mejor dependencia
+
+// 	// AQUÍ ESTÁ EL FIX: Convertir de {east, north} a [x, y]
+// 	const rectangulos = rectangulosData.map((rectangulo) =>
+// 		rectangulo.vertices.map((vertex) => [vertex.east, vertex.north])
+// 	);
+
+// 	//
+// 	const handleConfirm = () => {
+// 		const { vertices, anguloGrados, alto, ancho, area } =
+// 			rectangulosData[selectedOption];
+// 		setMaximumRectangle({ vertices, anguloGrados, alto, ancho, area });
+
+// 		//setMaximumRectangle(rectangulos[selectedOption]);
+// 		close();
+// 	};
+
+// 	useEffect(() => {
+// 		// Solo ejecutar si hay rectángulos
+// 		if (rectangulos.length === 0) return;
+
+// 		// Destruir instancias de gráficos existentes
+// 		chartInstances.forEach((instance) => {
+// 			if (instance.current) {
+// 				instance.current.destroy();
+// 				instance.current = null;
+// 			}
+// 		});
+
+// 		// Crear los tres gráficos
+// 		rectangulos.forEach((rectanguloMax, index) => {
+// 			if (!chartRefs[index].current) return;
+
+// 			const ctx = chartRefs[index].current.getContext("2d");
+
+// 			// Plugin para rellenar el rectángulo
+// 			const fillRectanglePlugin = {
+// 				id: `fillRectangle${index}`,
+// 				beforeDraw(chart) {
+// 					if (!rectanguloMax.length) return;
+
+// 					const ctx = chart.ctx;
+// 					ctx.save();
+// 					ctx.fillStyle = "rgba(255, 165, 0, 0.7)";
+
+// 					ctx.beginPath();
+
+// 					// Convertir coordenadas del rectángulo a píxeles
+// 					rectanguloMax.forEach(([x, y], i) => {
+// 						const xPixel = chart.scales.x.getPixelForValue(x);
+// 						const yPixel = chart.scales.y.getPixelForValue(y);
+// 						if (i === 0) {
+// 							ctx.moveTo(xPixel, yPixel);
+// 						} else {
+// 							ctx.lineTo(xPixel, yPixel);
+// 						}
+// 					});
+
+// 					ctx.closePath();
+// 					ctx.fill();
+// 					ctx.restore();
+// 				},
+// 			};
+
+// 			// Calcular el área del rectángulo
+// 			const area =
+// 				rectangulosData[index]?.area ||
+// 				calcularAreaRectangulo(rectanguloMax);
+
+// 			chartInstances[index].current = new Chart(ctx, {
+// 				type: "line",
+// 				data: {
+// 					datasets: [
+// 						{
+// 							label: "Área Disponible",
+// 							data: availableVertices.map(([x, y]) => ({ x, y })),
+// 							borderColor: "lightblue",
+// 							backgroundColor: "rgba(173, 216, 230, 0.5)",
+// 							borderWidth: 2,
+// 							fill: true,
+// 						},
+// 						{
+// 							label: `Rectángulo Opción ${
+// 								index + 1
+// 							} (${area.toFixed(2)} m²)`,
+// 							data: rectanguloMax.map(([x, y]) => ({ x, y })),
+// 							borderColor: "orange",
+// 							backgroundColor: "rgba(255, 165, 0, 0.7)",
+// 							borderWidth: 2,
+// 							fill: false,
+// 							showLine: true,
+// 						},
+// 					],
+// 				},
+// 				options: {
+// 					responsive: true,
+// 					maintainAspectRatio: false,
+// 					scales: {
+// 						x: {
+// 							type: "linear",
+// 							position: "bottom",
+// 							title: {
+// 								display: true,
+// 								text: "Coordenadas X (East)",
+// 							},
+// 							ticks: {
+// 								display: false,
+// 							},
+// 							grid: {
+// 								drawTicks: false,
+// 							},
+// 						},
+// 						y: {
+// 							type: "linear",
+// 							title: {
+// 								display: true,
+// 								text: "Coordenadas Y (North)",
+// 							},
+// 							ticks: {
+// 								display: false,
+// 							},
+// 							grid: {
+// 								drawTicks: false,
+// 							},
+// 						},
+// 					},
+// 					plugins: {
+// 						legend: {
+// 							position: "top",
+// 						},
+// 						tooltip: {
+// 							enabled: true,
+// 						},
+// 						title: {
+// 							display: true,
+// 							text: `Opción ${index + 1} - Área: ${area.toFixed(
+// 								2
+// 							)} m²`,
+// 						},
+// 					},
+// 				},
+// 				plugins: [fillRectanglePlugin],
+// 			});
+// 		});
+
+// 		return () => {
+// 			// Limpiar todas las instancias al desmontar
+// 			chartInstances.forEach((instance) => {
+// 				if (instance.current) {
+// 					instance.current.destroy();
+// 					instance.current = null;
+// 				}
+// 			});
+// 		};
+// 	}, [rectangulos.length, selectedOption]); // Mejor dependencia
+
+// 	// Calcular el área aproximada del rectángulo
+// 	function calcularAreaRectangulo(vertices) {
+// 		if (!vertices || vertices.length < 3) return 0;
+
+// 		const points =
+// 			vertices[0] &&
+// 			vertices[vertices.length - 1] &&
+// 			vertices[0][0] === vertices[vertices.length - 1][0] &&
+// 			vertices[0][1] === vertices[vertices.length - 1][1]
+// 				? vertices.slice(0, -1)
+// 				: [...vertices];
+
+// 		let area = 0;
+// 		for (let i = 0; i < points.length; i++) {
+// 			const j = (i + 1) % points.length;
+// 			area += points[i][0] * points[j][1];
+// 			area -= points[j][0] * points[i][1];
+// 		}
+
+// 		return Math.abs(area) / 2;
+// 	}
+
+// 	const handleOptionSelect = (index) => {
+// 		setSelectedOption(index);
+// 	};
+
+// 	// Si no hay datos aún, mostrar loading
+// 	if (rectangulosData.length === 0) {
+// 		return (
+// 			<div className="text-center p-4">
+// 				<p>Calculando rectángulos óptimos...</p>
+// 			</div>
+// 		);
+// 	}
+
+// 	return (
+// 		<div className="rectangle-charts-container">
+// 			<h3 className="text-center mb-3">
+// 				Seleccione la mejor opción de rectángulo
+// 			</h3>
+
+// 			<div
+// 				className="option-buttons mb-4"
+// 				style={{
+// 					display: "flex",
+// 					justifyContent: "center",
+// 					gap: "10px",
+// 				}}
+// 			>
+// 				{rectangulos.map((_, index) => (
+// 					<button
+// 						key={index}
+// 						onClick={() => handleOptionSelect(index)}
+// 						className={`btn ${
+// 							selectedOption === index
+// 								? "btn-primary"
+// 								: "btn-outline-primary"
+// 						}`}
+// 						style={{
+// 							padding: "8px 16px",
+// 							borderRadius: "4px",
+// 							cursor: "pointer",
+// 							backgroundColor:
+// 								selectedOption === index ? "#007bff" : "white",
+// 							color:
+// 								selectedOption === index ? "white" : "#007bff",
+// 							border: "1px solid #007bff",
+// 						}}
+// 					>
+// 						Opción {index + 1}
+// 					</button>
+// 				))}
+// 			</div>
+
+// 			<div
+// 				className="charts-container"
+// 				style={{
+// 					display: "grid",
+// 					gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+// 					gap: "20px",
+// 				}}
+// 			>
+// 				{rectangulos.map((_, index) => (
+// 					<div
+// 						key={index}
+// 						className={`chart-wrapper ${
+// 							selectedOption === index ? "selected" : ""
+// 						}`}
+// 						style={{
+// 							height: "300px",
+// 							border:
+// 								selectedOption === index
+// 									? "2px solid #007bff"
+// 									: "1px solid #ddd",
+// 							borderRadius: "8px",
+// 							padding: "10px",
+// 							boxShadow:
+// 								selectedOption === index
+// 									? "0 0 10px rgba(0,123,255,0.3)"
+// 									: "none",
+// 							transition: "all 0.3s ease",
+// 						}}
+// 					>
+// 						<canvas
+// 							ref={chartRefs[index]}
+// 							style={{ width: "100%", height: "100%" }}
+// 						></canvas>
+// 					</div>
+// 				))}
+// 			</div>
+
+// 			<div className="text-center mt-4">
+// 				<button
+// 					className="btn btn-success"
+// 					onClick={handleConfirm}
+// 					style={{
+// 						padding: "10px 20px",
+// 						backgroundColor: "#28a745",
+// 						color: "white",
+// 						border: "none",
+// 						borderRadius: "4px",
+// 						cursor: "pointer",
+// 					}}
+// 				>
+// 					Confirmar Selección
+// 				</button>
+// 			</div>
+// 		</div>
+// 	);
+// };
 const RectangleChart = ({
 	verDispo,
 	verticesExcluted,
 	setMaximumRectangle,
 	close,
 }) => {
-	// Array de referencias para los tres gráficos
 	const chartRefs = [useRef(null), useRef(null), useRef(null)];
 	const chartInstances = [useRef(null), useRef(null), useRef(null)];
 
-	// Estado para la opción seleccionada
 	const [selectedOption, setSelectedOption] = useState(0);
+	const [rectangulosData, setRectangulosData] = useState([]);
+	const [loading, setLoading] = useState(true);
 
 	// Filtrar vértices excluidos
 	const availableVertices = verDispo.filter(
 		([x, y]) => !verticesExcluted.some(([vx, vy]) => vx === x && vy === y)
 	);
 
-	// Obtener los 3 mejores rectángulos
+	useEffect(() => {
+		const calcularRectangulos = async () => {
+			setLoading(true);
+			try {
+				const opciones = await MaxRectangle(availableVertices);
+				console.log("Opciones recibidas:", opciones);
+				setRectangulosData(opciones);
+			} catch (error) {
+				console.error("Error al calcular rectángulos:", error);
+			} finally {
+				setLoading(false);
+			}
+		};
 
-	const rectangulosData = MaxRectangle(availableVertices);
-	const rectangulos = rectangulosData.map(
-		(rectangulo) => rectangulo.vertices
+		if (availableVertices.length > 0) {
+			calcularRectangulos();
+		}
+	}, [availableVertices.length]);
+
+	const rectangulos = rectangulosData.map((rectangulo) =>
+		rectangulo.vertices.map((vertex) => [vertex.east, vertex.north])
 	);
-	const handleConfirm = () => {
-		const { vertices, angulo } = rectangulosData[selectedOption];
-		setMaximumRectangle({ vertices, angulo });
 
-		//setMaximumRectangle(rectangulos[selectedOption]);
+	const handleConfirm = () => {
+		const { vertices, anguloGrados, alto, ancho, area, perimetro } =
+			rectangulosData[selectedOption];
+		setMaximumRectangle({
+			vertices,
+			anguloGrados,
+			alto,
+			ancho,
+			area,
+			perimetro,
+		});
 		close();
 	};
+
 	useEffect(() => {
-		// Destruir instancias de gráficos existentes
+		if (rectangulos.length === 0) return;
+
 		chartInstances.forEach((instance) => {
 			if (instance.current) {
 				instance.current.destroy();
+				instance.current = null;
 			}
 		});
 
-		// Crear los tres gráficos
 		rectangulos.forEach((rectanguloMax, index) => {
 			if (!chartRefs[index].current) return;
 
 			const ctx = chartRefs[index].current.getContext("2d");
 
-			// Plugin para rellenar el rectángulo
 			const fillRectanglePlugin = {
 				id: `fillRectangle${index}`,
 				beforeDraw(chart) {
@@ -1853,11 +2337,9 @@ const RectangleChart = ({
 
 					const ctx = chart.ctx;
 					ctx.save();
-					ctx.fillStyle = "rgba(255, 165, 0, 0.7)";
-
+					ctx.fillStyle = "rgba(25, 118, 210, 0.2)"; // Color MUI primary
 					ctx.beginPath();
 
-					// Convertir coordenadas del rectángulo a píxeles
 					rectanguloMax.forEach(([x, y], i) => {
 						const xPixel = chart.scales.x.getPixelForValue(x);
 						const yPixel = chart.scales.y.getPixelForValue(y);
@@ -1874,8 +2356,9 @@ const RectangleChart = ({
 				},
 			};
 
-			// Calcular el área del rectángulo para mostrarla
-			const area = calcularAreaRectangulo(rectanguloMax);
+			const area =
+				rectangulosData[index]?.area ||
+				calcularAreaRectangulo(rectanguloMax);
 
 			chartInstances[index].current = new Chart(ctx, {
 				type: "line",
@@ -1884,23 +2367,19 @@ const RectangleChart = ({
 						{
 							label: "Área Disponible",
 							data: availableVertices.map(([x, y]) => ({ x, y })),
-							borderColor: "lightblue",
-							backgroundColor: "rgba(173, 216, 230, 0.5)",
+							borderColor: "rgba(158, 158, 158, 0.8)",
+							backgroundColor: "rgba(238, 238, 238, 0.5)",
 							borderWidth: 2,
 							fill: true,
 						},
 						{
-							label: `Rectángulo Opción ${
-								index + 1
-							} (${area.toFixed(2)} m²)`,
-							data: rectanguloMax.map(([x, y]) => ({
-								x,
-								y,
-							})),
-							borderColor: "orange",
-							backgroundColor: "rgba(255, 165, 0, 0.7)",
-							borderWidth: 2,
-							fill: true,
+							label: `Rectángulo Opción ${index + 1}`,
+							data: rectanguloMax.map(([x, y]) => ({ x, y })),
+							borderColor: "rgb(25, 118, 210)",
+							backgroundColor: "rgba(25, 118, 210, 0.2)",
+							borderWidth: 3,
+							fill: false,
+							showLine: true,
 						},
 					],
 				},
@@ -1913,38 +2392,29 @@ const RectangleChart = ({
 							position: "bottom",
 							title: {
 								display: true,
-								text: "Coordenadas X",
+								text: "Coordenadas X (East)",
+								font: { size: 12, weight: "bold" },
 							},
-							ticks: {
-								display: false,
-							},
-							grid: {
-								drawTicks: false,
-							},
+							ticks: { display: false },
+							grid: { drawTicks: false },
 						},
 						y: {
 							type: "linear",
-							ticks: {
-								display: false,
+							title: {
+								display: true,
+								text: "Coordenadas Y (North)",
+								font: { size: 12, weight: "bold" },
 							},
-							grid: {
-								drawTicks: false,
-							},
+							ticks: { display: false },
+							grid: { drawTicks: false },
 						},
 					},
 					plugins: {
 						legend: {
 							position: "top",
+							labels: { boxWidth: 12, padding: 10 },
 						},
-						tooltip: {
-							enabled: true,
-						},
-						title: {
-							display: true,
-							text: `Opción ${index + 1} - Área: ${area.toFixed(
-								2
-							)} m²`,
-						},
+						tooltip: { enabled: true },
 					},
 				},
 				plugins: [fillRectanglePlugin],
@@ -1952,20 +2422,18 @@ const RectangleChart = ({
 		});
 
 		return () => {
-			// Limpiar todas las instancias al desmontar
 			chartInstances.forEach((instance) => {
 				if (instance.current) {
 					instance.current.destroy();
+					instance.current = null;
 				}
 			});
 		};
-	}, [verDispo, rectangulos]);
+	}, [rectangulos.length, selectedOption]);
 
-	// Calcular el área aproximada del rectángulo usando la fórmula de Shoelace
 	function calcularAreaRectangulo(vertices) {
 		if (!vertices || vertices.length < 3) return 0;
 
-		// Eliminar el último vértice si es igual al primero (polígono cerrado)
 		const points =
 			vertices[0] &&
 			vertices[vertices.length - 1] &&
@@ -1984,107 +2452,247 @@ const RectangleChart = ({
 		return Math.abs(area) / 2;
 	}
 
-	// Función para seleccionar una opción
 	const handleOptionSelect = (index) => {
 		setSelectedOption(index);
 	};
 
-	return (
-		<div className="rectangle-charts-container">
-			<h3 className="text-center mb-3">
-				Seleccione la mejor opción de rectángulo
-			</h3>
-
-			{/* Botones para seleccionar opciones */}
-			<div
-				className="option-buttons mb-4"
-				style={{
-					display: "flex",
-					justifyContent: "center",
-					gap: "10px",
-				}}
-			>
-				{rectangulos.map((_, index) => (
-					<button
-						key={index}
-						onClick={() => handleOptionSelect(index)}
-						className={`btn ${
-							selectedOption === index
-								? "btn-primary"
-								: "btn-outline-primary"
-						}`}
-						style={{
-							padding: "8px 16px",
-							borderRadius: "4px",
-							cursor: "pointer",
-							backgroundColor:
-								selectedOption === index ? "#007bff" : "white",
-							color:
-								selectedOption === index ? "white" : "#007bff",
-							border: "1px solid #007bff",
-						}}
-					>
-						Opción {index + 1}
-					</button>
-				))}
-			</div>
-
-			{/* Contenedor para los gráficos */}
-			<div
-				className="charts-container"
-				style={{
-					display: "grid",
-					gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-					gap: "20px",
-				}}
-			>
-				{rectangulos.map((_, index) => (
-					<div
-						key={index}
-						className={`chart-wrapper ${
-							selectedOption === index ? "selected" : ""
-						}`}
-						style={{
-							height: "300px",
-							border:
-								selectedOption === index
-									? "2px solid #007bff"
-									: "1px solid #ddd",
-							borderRadius: "8px",
-							padding: "10px",
-							boxShadow:
-								selectedOption === index
-									? "0 0 10px rgba(0,123,255,0.3)"
-									: "none",
-							transition: "all 0.3s ease",
-						}}
-					>
-						<canvas
-							ref={chartRefs[index]}
-							style={{ width: "100%", height: "100%" }}
-						></canvas>
-					</div>
-				))}
-			</div>
-
-			{/* Botón para confirmar selección */}
-			<div className="text-center mt-4">
-				<button
-					className="btn btn-success"
-					onClick={handleConfirm}
-					style={{
-						padding: "10px 20px",
-						backgroundColor: "#28a745",
-						color: "white",
-						border: "none",
-						borderRadius: "4px",
-						cursor: "pointer",
+	// Loading mejorado con Material-UI
+	if (loading) {
+		return (
+			<Fade in={loading}>
+				<Box
+					sx={{
+						display: "flex",
+						flexDirection: "column",
+						alignItems: "center",
+						justifyContent: "center",
+						minHeight: "400px",
+						gap: 3,
 					}}
 				>
+					<CircularProgress size={60} thickness={4} />
+					<Typography variant="h6" color="text.secondary">
+						Calculando rectángulos óptimos...
+					</Typography>
+					<Typography variant="body2" color="text.secondary">
+						Analizando {availableVertices.length} vértices
+						disponibles
+					</Typography>
+				</Box>
+			</Fade>
+		);
+	}
+
+	return (
+		<Box sx={{ p: 3 }}>
+			<Typography
+				variant="h5"
+				gutterBottom
+				align="center"
+				sx={{ mb: 4, fontWeight: 600 }}
+			>
+				Seleccione la mejor opción de rectángulo
+			</Typography>
+
+			<Stack
+				direction="row"
+				spacing={2}
+				justifyContent="center"
+				sx={{ mb: 4 }}
+			>
+				{rectangulos.map((_, index) => {
+					const area = rectangulosData[index]?.area || 0;
+					return (
+						<Button
+							key={index}
+							variant={
+								selectedOption === index
+									? "contained"
+									: "outlined"
+							}
+							onClick={() => handleOptionSelect(index)}
+							// startIcon={
+							// 	selectedOption === index && <CheckCircleIcon />
+							// }
+							sx={{
+								minWidth: 140,
+								py: 1.5,
+								transition: "all 0.3s ease",
+								"&:hover": {
+									transform: "translateY(-2px)",
+									boxShadow: 2,
+								},
+							}}
+						>
+							<Box
+								sx={{
+									display: "flex",
+									flexDirection: "column",
+									alignItems: "flex-start",
+								}}
+							>
+								<Typography variant="button">
+									Opción {index + 1}
+								</Typography>
+								<Typography
+									variant="caption"
+									sx={{ opacity: 0.8 }}
+								>
+									{area.toFixed(2)} m²
+								</Typography>
+							</Box>
+						</Button>
+					);
+				})}
+			</Stack>
+
+			<Grid container spacing={3}>
+				{rectangulos.map((_, index) => {
+					const area =
+						rectangulosData[index]?.area ||
+						calcularAreaRectangulo(rectangulos[index]);
+					const { alto, ancho, anguloGrados } =
+						rectangulosData[index] || {};
+
+					return (
+						<Grid item xs={12} key={index}>
+							<Fade in={true} timeout={300 * (index + 1)}>
+								<Card
+									elevation={selectedOption === index ? 8 : 2}
+									sx={{
+										height: "100%",
+										transition: "all 0.3s ease",
+										border:
+											selectedOption === index ? 2 : 0,
+										borderColor: "primary.main",
+										cursor: "pointer",
+										"&:hover": {
+											transform: "translateY(-4px)",
+											boxShadow: 6,
+										},
+									}}
+									onClick={() => handleOptionSelect(index)}
+								>
+									<CardContent>
+										<Box
+											sx={{
+												display: "flex",
+												justifyContent: "space-between",
+												alignItems: "center",
+												mb: 2,
+											}}
+										>
+											<Typography
+												variant="h6"
+												component="div"
+											>
+												Opción {index + 1}
+											</Typography>
+											{/* <Chip
+												icon={<SquareFootIcon />}
+												label={`${area.toFixed(2)} m²`}
+												color={
+													selectedOption === index
+														? "primary"
+														: "default"
+												}
+												size="small"
+											/> */}
+										</Box>
+
+										{(alto ||
+											ancho ||
+											anguloGrados !== undefined) && (
+											<Box
+												sx={{
+													mb: 2,
+													display: "flex",
+													gap: 1,
+													flexWrap: "wrap",
+												}}
+											>
+												{alto && (
+													<Chip
+														label={`Alto: ${alto.toFixed(
+															2
+														)}m`}
+														size="small"
+														variant="outlined"
+													/>
+												)}
+												{ancho && (
+													<Chip
+														label={`Ancho: ${ancho.toFixed(
+															2
+														)}m`}
+														size="small"
+														variant="outlined"
+													/>
+												)}
+												{anguloGrados !== undefined && (
+													<Chip
+														label={`${anguloGrados.toFixed(
+															1
+														)}°`}
+														size="small"
+														variant="outlined"
+													/>
+												)}
+											</Box>
+										)}
+
+										<Paper
+											elevation={0}
+											sx={{
+												height: 280,
+												backgroundColor: "grey.50",
+												p: 1,
+												borderRadius: 2,
+											}}
+										>
+											<canvas
+												ref={chartRefs[index]}
+												style={{
+													width: "100%",
+													height: "100%",
+												}}
+											/>
+										</Paper>
+									</CardContent>
+								</Card>
+							</Fade>
+						</Grid>
+					);
+				})}
+			</Grid>
+
+			<Box
+				sx={{
+					display: "flex",
+					justifyContent: "center",
+					mt: 4,
+					gap: 2,
+				}}
+			>
+				<Button
+					variant="outlined"
+					onClick={close}
+					size="large"
+					sx={{ minWidth: 120 }}
+				>
+					Cancelar
+				</Button>
+				<Button
+					variant="contained"
+					onClick={handleConfirm}
+					size="large"
+					//startIcon={<CheckCircleIcon />}
+					sx={{ minWidth: 120 }}
+				>
 					Confirmar Selección
-				</button>
-			</div>
-		</div>
+				</Button>
+			</Box>
+		</Box>
 	);
 };
 

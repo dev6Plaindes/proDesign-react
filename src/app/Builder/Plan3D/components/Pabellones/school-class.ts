@@ -132,7 +132,15 @@ export class School {
 	setVertices(vertices: string[] | string) {
 		if (typeof vertices === "string") {
 			try {
-				this.vertices = JSON.parse(vertices);
+				// Primer parse
+				let parsed = JSON.parse(vertices);
+
+				// Si después del parse sigue siendo string, parsear de nuevo
+				if (typeof parsed === "string") {
+					parsed = JSON.parse(parsed);
+				}
+
+				this.vertices = parsed;
 			} catch (error) {
 				console.error("Error al parsear vertices:", error);
 				this.vertices = [];
@@ -145,7 +153,15 @@ export class School {
 	setVerticesRectangle(verticesRectangle: string[] | string) {
 		if (typeof verticesRectangle === "string") {
 			try {
-				this.verticesRectangle = JSON.parse(verticesRectangle);
+				// Primer parse
+				let parsed = JSON.parse(verticesRectangle);
+
+				// Si después del parse sigue siendo string, parsear de nuevo
+				if (typeof parsed === "string") {
+					parsed = JSON.parse(parsed);
+				}
+
+				this.verticesRectangle = parsed;
 			} catch (error) {
 				console.error("Error al parsear verticesRectangle:", error);
 				this.verticesRectangle = [];
@@ -180,19 +196,21 @@ export class School {
 		} else {
 			this.setTotalArea(0); // o manejarlo como desees
 		}
-
-		if (state.vertices_rectangle && state.vertices_rectangle.length >= 3) {
-			const { areaMax, length, width } = AreaMaxRectangle(
-				this.verticesRectangle
-			);
-			this.setPartialArea(areaMax);
-			this.setWidth(width);
-			this.setLength(length);
-		} else {
-			this.setPartialArea(0);
-			this.setWidth(0);
-			this.setLength(0);
-		}
+		this.setPartialArea(state.width);
+		this.setWidth(state.width);
+		this.setLength(state.height);
+		// if (state.vertices_rectangle && state.vertices_rectangle.length >= 3) {
+		// 	const { areaMax, length, width } = AreaMaxRectangle(
+		// 		this.verticesRectangle
+		// 	);
+		// 	this.setPartialArea(areaMax);
+		// 	this.setWidth(width);
+		// 	this.setLength(length);
+		// } else {
+		// 	this.setPartialArea(0);
+		// 	this.setWidth(0);
+		// 	this.setLength(0);
+		// }
 		const niveles = (() => {
 			try {
 				return typeof state.level === "string"
@@ -227,22 +245,24 @@ export class School {
 		let parsedAmbientes = [];
 
 		try {
-			// Agregar validación para state.ambientes antes de procesarlo
-			if (state.ambientes !== undefined && state.ambientes !== null) {
-				parsedAmbientes =
-					typeof state.ambientes === "string"
-						? JSON.parse(state.ambientes)
-						: state.ambientes;
+			let ambientesData =
+				typeof state.ambientes === "string"
+					? JSON.parse(state.ambientes)
+					: state.ambientes;
+
+			if (typeof ambientesData === "string") {
+				console.log(
+					"⚠️ Detectado doble escape en ambientes, parseando nuevamente"
+				);
+				ambientesData = JSON.parse(ambientesData);
 			}
+
+			parsedAmbientes = ambientesData;
 		} catch (e) {
 			console.error("Error al parsear 'state.ambientes':", e);
 			parsedAmbientes = [];
 		}
-
-		// Asegurar que parsedAmbientes sea un array
-		this.setComplementaryEnvironment(
-			Array.isArray(parsedAmbientes) ? parsedAmbientes : []
-		);
+		this.setComplementaryEnvironment(parsedAmbientes);
 		this.setGeneralArea(4550);
 
 		const aforo =

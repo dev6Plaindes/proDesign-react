@@ -62,9 +62,8 @@ export default function PlanIndex({ school }) {
 	if (!state) return <div>error state</div>;
 
 	return (
-		<Grid container xs={12} spacing={1}>
-			<Grid xs={12}>
-				<Header
+		<div style={{height: "100vh", border: "1px solid"}}>
+			<Header
 					state={state}
 					school={school}
 					view={view}
@@ -72,29 +71,21 @@ export default function PlanIndex({ school }) {
 					handleDrawerToggle={handleDrawerToggle}
 					handleSetClassrooms={handleSetClassrooms}
 				/>
-			</Grid>
-
-			<Grid
-				container
-				xs={12}
-				sx={{
-					height: "93.1vh",
-				}}
-			>
-				<Grid xs>
-					<Box
+			<div style={{height: "91vh", display: "flex"}}>
+					<div
 						component="main"
-						sx={{ height: "100%" }} // puede que esto deba cambiarse por la relacion de aspecto en perspective camera
+						style={{ height: "91vh", width: "100%" }} // puede que esto deba cambiarse por la relacion de aspecto en perspective camera
 						// sx={{ width: window.innerWidth - 18, height: window.innerHeight - 80 }}
 					>
-						<Plan3D school={school} state={state} view={view} />
+						<Plan3D school={school} state={state} view={view} height="90.7vh"/>
 						<OpenIconSpeedDial />
-					</Box>
-				</Grid>
-				<Grid item>
-					<Sidebar school={school} state={state} />
-				</Grid>
-			</Grid>
+					</div>
+				<div item>
+					<Sidebar school={school} state={state} style={{height: "91vh"}}/>
+				</div>
+			</div>
+
+			
 
 			{/* this */}
 			{/* <Grid item xs={4} zIndex={99999999999999} backgroundColor="red">jj</Grid> */}
@@ -140,7 +131,7 @@ export default function PlanIndex({ school }) {
 				construction_info={construction_info}
 				state={state}
 			/> */}
-		</Grid>
+		</div>
 	);
 }
 

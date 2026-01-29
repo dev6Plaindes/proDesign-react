@@ -17,12 +17,17 @@ export const register = async (name, lastname, email, password) => {
 };
 
 export const isCheckTokenService = async (token) => {
+	// console.log("service",token);
+	
 	return await request({
 		url: "/api/v1/auth/renew",
 		method: "GET",
-		data: { token },
+		headers: {
+			Authorization: `Bearer ${token}`,
+		},
 	});
 };
+
 
 // export const verifySSO = async (body) => {
 // 	const res = await request({

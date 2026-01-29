@@ -22,7 +22,8 @@ export default function Button2D({ handleViewState }) {
 
 	const handleViewModule = (module) => () => {
 		handleViewState({ view: "2D" });
-		dispatch(setView2DFloor({ floor: module }));
+		//dispatch(setView2DFloor({ floor: module }));
+		dispatch(setView2DFloor(module));
 		handleClose();
 	};
 

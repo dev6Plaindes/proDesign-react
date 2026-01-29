@@ -19,8 +19,18 @@ import {
 import TableCosts from "../TableCosts";
 import { useState, useEffect } from "react";
 import NewCostsTables from "./NewCostsTable";
+import { updateProjectExcelService } from "../../../../services/spreadsheetService";
+import { useSelector } from "react-redux";
 
 export default function Dashboard({ project, costs, school, handleCosts }) {
+	// Validaciones iniciales
+	if (!project || !costs) return <></>;
+	console.log("📦 Project:", project);
+	console.log("💰 Costs:", costs);
+	//console.log("numeros de ambientes", numberOfAmbience);
+
+	//if (project.length - 1 !== costs.calculatedCosts.length) return <></>;
+
 	const { numberOfClassrooms } = school;
 
 	// Estado para manejar los proyectos de costos creados
@@ -28,16 +38,25 @@ export default function Dashboard({ project, costs, school, handleCosts }) {
 	const [selectedProjectId, setSelectedProjectId] = useState("");
 	const [selectedProjectData, setSelectedProjectData] = useState(null);
 	const [loadingProjectData, setLoadingProjectData] = useState(false);
+	const [excelData, setExcelData] = useState({});
+	const numberOfAmbience = useSelector((state) => state.ambience);
 	const [open, setOpen] = useState(false);
 
-	// Validaciones iniciales
-	if (!project || !costs) return <></>;
-	console.log("📦 Project:", project);
-	console.log("💰 Costs:", costs);
-
-	if (project.length - 1 !== costs.calculatedCosts.length) return <></>;
-
 	const versions = project.filter((el) => el.parent_id !== 0);
+	useEffect(() => {
+		const fetchExcelData = async () => {
+			try {
+				const data = await updateProjectExcelService(numberOfAmbience);
+				setExcelData(data);
+			} catch (error) {
+				console.error("Error al obtener datos de Excel:", error);
+			}
+		};
+
+		fetchExcelData();
+	}, []);
+
+	console.log("datos enviados excel::::::", excelData);
 
 	const handleClickOpen = () => {
 		setOpen(true);
@@ -100,7 +119,7 @@ export default function Dashboard({ project, costs, school, handleCosts }) {
 
 		const newProject = {
 			id: newProjectId,
-			name: `Proyecto ${nextProjectNumber}`,
+			name: `Costeo ${nextProjectNumber}`,
 			costsCategories: { ...updatedCategories },
 			calculatedCosts: { ...updatedCalculatedCosts },
 			projectData: { ...projectData },
@@ -143,18 +162,16 @@ export default function Dashboard({ project, costs, school, handleCosts }) {
 			}}
 		>
 			{/* Botón para crear nuevo costeo */}
-			{project
-				?.filter((el) => el.parent_id !== 0)
-				.map((el, i) => (
-					<TableCosts
-						key={el.id}
-						handleCosts={handleCosts}
-						categories={costs.costsCategories[i]}
-						calculatedCosts={costs.calculatedCosts[i]}
-						project={el}
-						onNewVersion={handleNewProjectVersion}
-					/>
-				))}
+			{project.map((el, i) => (
+				<TableCosts
+					key={el.id}
+					handleCosts={handleCosts}
+					categories={costs.costsCategories[i]}
+					calculatedCosts={costs.calculatedCosts[i]}
+					project={el}
+					onNewVersion={handleNewProjectVersion}
+				/>
+			))}
 
 			{/* Sección que aparece cuando hay proyectos guardados */}
 			{hasProjects && (
@@ -248,6 +265,7 @@ export default function Dashboard({ project, costs, school, handleCosts }) {
 										],
 									}}
 									numberOfClassrooms={numberOfClassrooms}
+									excelData={excelData}
 								/>
 							</>
 						) : (
@@ -310,12 +328,13 @@ export default function Dashboard({ project, costs, school, handleCosts }) {
 									>
 										{savedProjects.length > 1 ? (
 											<ComparisonChart
-												versions={savedProjects.map(
-													(p) => p.projectData
-												)}
-												costs={savedProjects.map(
-													(p) => p.calculatedCosts
-												)}
+												// versions={savedProjects.map(
+												// 	(p) => p.projectData
+												// )}
+												// costs={savedProjects.map(
+												// 	(p) => p.calculatedCosts
+												// )}
+												savedProjects={savedProjects}
 											/>
 										) : (
 											<Typography

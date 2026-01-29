@@ -29,6 +29,8 @@ import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import Icon from "@mui/material/Icon";
 import GroupsIcon from "@mui/icons-material/Groups";
+import { Calculator } from "lucide-react";
+import { SquarePlus } from "lucide-react";
 import NewProject from "../NewProject/NewProject";
 import { deleteProjectService } from "../../../services/projectsService";
 import { deleteProject } from "../../../redux/projects/projectSlice";
@@ -40,51 +42,6 @@ export default function TableProjects({
 	projectsLoaded,
 }) {
 	return <ProjectsTable projects={projects} expand={initialExpand} />;
-
-	return (
-		<Box
-			sx={{
-				width: "100%",
-				overflowX: "auto",
-			}}
-		>
-			<div style={dataBoxGrid}>
-				<Box sx={{ ...styleGrid, width: "5%", minWidth: "50px" }}>
-					ID
-				</Box>
-				<Box sx={{ ...styleGrid, width: "5%", minWidth: "50px" }}>
-					Tipo
-				</Box>
-				<Box sx={{ ...styleGrid, minWidth: "180px", width: "20%" }}>
-					Nombre
-				</Box>
-				<Box sx={{ ...styleGrid, minWidth: "100px", width: "10%" }}>
-					Ubicación
-				</Box>
-				<Box sx={{ ...styleGrid, minWidth: "150px", width: "10%" }}>
-					Responsable
-				</Box>
-				<Box sx={{ ...styleGrid, minWidth: "40px", width: "15%" }}>
-					Creado
-				</Box>
-				<Box sx={{ ...styleGrid, minWidth: "120px", width: "15%" }}>
-					Actualizado
-				</Box>
-				<Box sx={{ ...styleGrid, minWidth: "170px", width: "20%" }}>
-					Cliente
-				</Box>
-				<Box sx={{ ...styleGrid, minWidth: "100px", width: "10%" }}>
-					Acciones
-				</Box>
-			</div>
-
-			{projects !== null ? (
-				<RowsList projects={projects} initialExpand={initialExpand} />
-			) : projectsLoaded ? null : (
-				<LoadingRowList />
-			)}
-		</Box>
-	);
 }
 
 const RowsList = ({ projects, setMutate, initialExpand }) => {
@@ -181,7 +138,10 @@ function ProjectsTable({ projects, expand }) {
 	const [page, setPage] = useState(0);
 	const [rowsPerPage, setRowsPerPage] = useState(10);
 
-	const parentProjects = projects?.filter((el) => el.parent_id === 0);
+	//const parentProjects = projects?.filter((el) => el.parent_id === 0);
+	const parentProjects = projects
+		?.filter((el) => el.parent_id === 0)
+		.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
 	const handleChangePage = (event, newPage) => {
 		setPage(newPage);
@@ -295,6 +255,8 @@ function Row({ row, versions, color, expand }) {
 		});
 	};
 
+	const handleCosts = () => {};
+
 	return (
 		<>
 			{/* <TableRow hover role="checkbox" tabIndex={-1} key={row.id} sx={{ '& > *': { borderBottom: 'unset', borderTop: "unset" } }}> */}
@@ -366,9 +328,9 @@ function Row({ row, versions, color, expand }) {
 				<TableCell>Privado</TableCell>
 				<TableCell>
 					<Box sx={{ display: "flex", justifyContent: "center" }}>
-						<Tooltip title="Nuevo" arrow disableInteractive>
-							<IconButton>
-								<NewProject onRow data={row} />
+						<Tooltip title="Costos" arrow disableInteractive>
+							<IconButton onClick={handleToggle}>
+								<SquarePlus sx={{ fontSize: 100 }} />
 							</IconButton>
 						</Tooltip>
 
@@ -500,17 +462,6 @@ const CarruselRow = ({ open, version, handleDelete }) => {
 						{version.name}
 					</span>
 				</RouterLink>
-				<RouterLink to={`/proyecto/colegios/${version.id - 1}/costs`}>
-					<span
-						style={{
-							color: "#3699FF",
-							display: "block",
-							marginTop: "10px",
-						}}
-					>
-						COSTOS
-					</span>
-				</RouterLink>
 			</TableCell>
 			<TableCell>{version.ubication}</TableCell>
 			<TableCell>{version.manager}</TableCell>
@@ -541,9 +492,12 @@ const CarruselRow = ({ open, version, handleDelete }) => {
 			<TableCell>
 				{open && (
 					<Box sx={{ display: "flex", justifyContent: "center" }}>
-						<Tooltip title="Nuevosdsds" arrow disableInteractive>
-							<IconButton>
-								<NewProject onRow data={version} />
+						<Tooltip title="Costos" arrow disableInteractive>
+							<IconButton
+								component={RouterLink}
+								to={`/proyecto/colegios/${version.id}/costs`}
+							>
+								<Calculator />
 							</IconButton>
 						</Tooltip>
 

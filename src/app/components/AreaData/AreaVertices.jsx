@@ -1,23 +1,22 @@
 const AreaVertices = (vertices) => {
-	// Add safety check to ensure vertices is an array
-	const safeVertices = Array.isArray(vertices) ? vertices : [];
-
-	if (!safeVertices || safeVertices.length < 3) {
+	if (!vertices || vertices.length < 3) {
 		return { area: 0, perimetro: 0, largo: 0, ancho: 0 };
 	}
 
+	console.log("vertices data", typeof vertices);
+	console.log("vertices", vertices);
 	const closedVertices =
-		safeVertices[0][0] === safeVertices[safeVertices.length - 1][0] &&
-		safeVertices[0][1] === safeVertices[safeVertices.length - 1][1]
-			? safeVertices
-			: [...safeVertices, safeVertices[0]];
+		vertices[0][0] === vertices[vertices.length - 1][0] &&
+		vertices[0][1] === vertices[vertices.length - 1][1]
+			? vertices
+			: [...vertices, vertices[0]];
 
 	// Calcular Área (fórmula del polígono de Shoelace)
 	let area = 0;
-	const n = safeVertices.length;
+	const n = vertices.length;
 	for (let i = 0; i < n; i++) {
-		const [x1, y1] = safeVertices[i];
-		const [x2, y2] = safeVertices[(i + 1) % n];
+		const [x1, y1] = vertices[i];
+		const [x2, y2] = vertices[(i + 1) % n];
 		area += x1 * y2 - x2 * y1;
 	}
 	const areaAbs = Math.abs(area / 2);
@@ -34,8 +33,8 @@ const AreaVertices = (vertices) => {
 	const perimetroRedondeado = Math.round(perimetro * 100) / 100;
 
 	// Calcular largo y ancho del bounding box
-	const xs = safeVertices.map(([x]) => x);
-	const ys = safeVertices.map(([, y]) => y);
+	const xs = vertices.map(([x]) => x);
+	const ys = vertices.map(([, y]) => y);
 	const ancho = Math.round((Math.max(...xs) - Math.min(...xs)) * 100) / 100;
 	const largo = Math.round((Math.max(...ys) - Math.min(...ys)) * 100) / 100;
 

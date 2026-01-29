@@ -1,4 +1,5 @@
 export default function Bigas({ bigas }) {
+	//return bigas.data.map((el) => (
 	return bigas.data.map((el) => (
 		<Biga
 			key={el.id}

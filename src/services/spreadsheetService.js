@@ -22,8 +22,7 @@ export const updateProjectExcelService = async (projectExcelData) => {
 	try {
 		const response = await axios.post(
 			//`${API_BASE_URL}/excel/update-project-excel`,
-			import.meta.env.VITE_API_BASE_URL +
-				"/api/v1/excel/update-project-excel",
+			import.meta.env.VITE_API_BASE_URL + "/api/v1/excel/costos/calcular",
 			projectExcelData,
 			{
 				headers: {

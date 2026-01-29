@@ -3,6 +3,7 @@ import Toolbar from "@mui/material/Toolbar";
 import Box from "@mui/material/Box";
 import ToolsBarComponent from "../ToolsBar/ToolsBar";
 import { UserPopover } from "../../../components";
+import zIndex from "@mui/material/styles/zIndex";
 // import Grid from "@mui/material/Grid";
 // import IconButton from "@mui/material/IconButton";
 // import KeyboardBackspaceIcon from "@mui/icons-material/KeyboardBackspace";
@@ -24,7 +25,8 @@ export default function Header({
 					sm: "#ffffff"
 				},
 				boxShadow: "0px 0px 40px 0px rgb(82 63 105 / 10%)",
-				WebkitBoxShadow: "0px 0px 40px 0px rgb(82 63 105 / 10%)"
+				WebkitBoxShadow: "0px 0px 40px 0px rgb(82 63 105 / 10%)",
+				zIndex: 50,
 			}}
 		>
 			<Toolbar  sx={{ px: "5px" }}>

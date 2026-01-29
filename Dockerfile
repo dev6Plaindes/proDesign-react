@@ -1,19 +1,24 @@
-FROM node:16.14-alpine3.15 as builder_prod
+# ---------- BUILD ----------
+FROM node:20-alpine AS build
 
 WORKDIR /app
 
-COPY ./package*.json ./
-
+COPY package*.json ./
 RUN npm install
 
 COPY . .
-
 RUN npm run build
 
-
+# ---------- SERVE ----------
 FROM nginx:alpine
 
-EXPOSE 5000
+# Copiar build de Vite
+COPY --from=build /app/dist /usr/share/nginx/html
 
+# Config opcional para SPA (React Router)
+RUN rm /etc/nginx/conf.d/default.conf
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=builder_prod /app/dist /usr/share/nginx/html
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

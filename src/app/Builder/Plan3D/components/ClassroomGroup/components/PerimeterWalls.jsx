@@ -119,13 +119,13 @@ export default function PerimeterWalls({
 			</mesh> */}
 
 			{/* puntos del rectángulo (debug, opcional) */}
-			{debug &&
+			{/* {debug &&
 				rectCoords.map((pos2, ind) => (
 					<mesh key={ind} position={[pos2[0], pos2[1], 0.1]}>
 						<circleGeometry args={[1, 16]} />
 						<meshBasicMaterial color="#00ff00" />
 					</mesh>
-				))}
+				))} */}
 			<GreenArea
 				vertices={vertices}
 				rectangleVertices={rectangleVertices}
@@ -135,7 +135,7 @@ export default function PerimeterWalls({
 			/>
 			{/* Renderizar elementos dentro del rectángulo — mantuve la lógica que usabas */}
 			<group
-				position={[centerX, 0, centerY]}
+				position={[centerX, 0, 0]}
 				rotation={[Math.PI / 2, -Math.PI / 2, 0]}
 			>
 				{children}

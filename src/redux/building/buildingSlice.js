@@ -12,6 +12,7 @@ const initialState = {
 	floor1: true,
 	floor2: true,
 	floor3: true,
+	floor: 1,
 };
 
 export const buildingSlice = createSlice({
@@ -59,10 +60,11 @@ export const buildingSlice = createSlice({
 			state.floor2 = payload.floor >= 2;
 			state.floor3 = payload.floor >= 3;
 		},
-		setView2DFloor: (state, { payload }) => {
-			state.floor1 = payload.floor === 1;
-			state.floor2 = payload.floor === 2;
-			state.floor3 = payload.floor === 3;
+		setView2DFloor: (state, action) => {
+			state.floor = action.payload;
+			// state.floor1 = payload.floor === 1;
+			// state.floor2 = payload.floor === 2;
+			// state.floor3 = payload.floor === 3;
 		},
 	},
 });

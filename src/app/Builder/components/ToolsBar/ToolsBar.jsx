@@ -27,6 +27,7 @@ import Button2D from "./Buttons/Button2D";
 // import ButtonSave from "./Buttons/ButtonSave";
 import "./styles.css";
 import Settings from "../Settings/Settings";
+import { requestExport } from "../../../../redux/features/exportSlice";
 
 export default function ToolsBar({
 	state,
@@ -47,77 +48,13 @@ export default function ToolsBar({
 
 	const handleColorWall = debounce((value) => baseFn(value));
 
-	// const ambientes = [
-	// 	{
-	// 		nombre: "Aula Completa",
-	// 		tipo: "aula",
-	// 		posicion: { x: 0, y: 0, z: 0 },
-	// 		dimensiones: { ancho: 600, profundidad: 500, alto: 300 },
-	// 		componentes: [
-	// 			{
-	// 				tipo: "piso",
-	// 				nombre: "piso",
-	// 				posicion: { x: 0, y: 0, z: 0 },
-	// 				dimensiones: { ancho: 600, profundidad: 500, alto: 10 },
-	// 			},
-	// 			{
-	// 				tipo: "techo",
-	// 				nombre: "techo",
-	// 				posicion: { x: 0, y: 0, z: 290 },
-	// 				dimensiones: { ancho: 600, profundidad: 500, alto: 10 },
-	// 			},
-	// 			{
-	// 				tipo: "pared",
-	// 				nombre: "pared izquierda",
-	// 				posicion: { x: 0, y: 0, z: 0 },
-	// 				dimensiones: { ancho: 10, profundidad: 500, alto: 300 },
-	// 			},
-	// 			{
-	// 				tipo: "pared",
-	// 				nombre: "pared derecha",
-	// 				posicion: { x: 590, y: 0, z: 0 },
-	// 				dimensiones: { ancho: 10, profundidad: 500, alto: 300 },
-	// 			},
-	// 			{
-	// 				tipo: "pared",
-	// 				nombre: "pared trasera",
-	// 				posicion: { x: 0, y: 490, z: 0 },
-	// 				dimensiones: { ancho: 600, profundidad: 10, alto: 300 },
-	// 			},
-	// 			{
-	// 				tipo: "pared",
-	// 				nombre: "pared frontal izquierda de puerta",
-	// 				posicion: { x: 0, y: 0, z: 0 },
-	// 				dimensiones: { ancho: 200, profundidad: 10, alto: 300 },
-	// 			},
-	// 			{
-	// 				tipo: "pared",
-	// 				nombre: "pared frontal derecha de puerta",
-	// 				posicion: { x: 350, y: 0, z: 0 },
-	// 				dimensiones: { ancho: 250, profundidad: 10, alto: 300 },
-	// 			},
-	// 			{
-	// 				tipo: "pared",
-	// 				nombre: "parte superior de puerta",
-	// 				posicion: { x: 200, y: 0, z: 200 },
-	// 				dimensiones: { ancho: 150, profundidad: 10, alto: 100 },
-	// 			},
-	// 		],
-	// 	},
-	// ];
+	const handleExportChange = (event) => {
+		const exportType = event.target.value; // 'json', 'excel', etc.
 
-	// const exportarJSON = () => {
-	// 	const data = JSON.stringify(ambientes, null, 2);
-	// 	const blob = new Blob([data], { type: "application/json" });
-	// 	const url = URL.createObjectURL(blob);
-
-	// 	const link = document.createElement("a");
-	// 	link.href = url;
-	// 	link.download = "distribucion_ambientes.json";
-	// 	document.body.appendChild(link);
-	// 	link.click();
-	// 	document.body.removeChild(link);
-	// };
+		if (exportType) {
+			dispatch(requestExport(exportType));
+		}
+	};
 
 	return (
 		<Box
@@ -137,7 +74,7 @@ export default function ToolsBar({
 			<nav className="greedy">
 				{/* width: 100% */}
 				<ul className="links">
-					<li>
+					{/* <li>
 						<Button
 							onClick={() =>
 								dispatch(
@@ -148,7 +85,7 @@ export default function ToolsBar({
 							<PlayIcon htmlColor="#3699FF" />
 							&nbsp; Play
 						</Button>
-					</li>
+					</li> */}
 
 					<li>
 						<Button2D handleViewState={handleViewState} />
@@ -172,7 +109,8 @@ export default function ToolsBar({
 
 					<li>
 						<Settings
-							state={state}
+							//state={state}
+							projectData={state}
 							school={school}
 							handleSetClassrooms={handleSetClassrooms}
 						/>
@@ -187,21 +125,13 @@ export default function ToolsBar({
 								margin: "0.3rem 0.4rem",
 								backgroundColor: "#E4E6EF",
 							}}
+							onChange={handleExportChange}
 						>
 							<option value="EXPORTAR">EXPORTAR</option>
+							<option value="json">📄 Exportar JSON</option>
 							<option value="analyze">🔍 Analizar Escena</option>
-							<option value="dxf-all">
-								🎯 DXF Completo (incluye invisibles)
-							</option>
-							<option value="dxf-robust">
-								DXF Robusto (solo visibles)
-							</option>
-							<option value="dxf-boxes">
-								DXF Cajas (Simple)
-							</option>
 							<option value="obj">OBJ (Mesh)</option>
-							<option value="stl">STL (3D Print)</option>
-							<option value="json">JSON (Debug)</option>
+
 							<option value="jpeg">JPEG (Image)</option>
 						</select>
 						{/* <button
@@ -212,7 +142,7 @@ export default function ToolsBar({
 						</button> */}
 					</li>
 
-					<li>
+					{/* <li>
 						<select
 							id="select-view"
 							style={{
@@ -226,7 +156,7 @@ export default function ToolsBar({
 							<option value="1">VISTA COMPLETA</option>
 							<option value="2">VISTA MUROS</option>
 						</select>
-					</li>
+					</li> */}
 
 					{/* <li>
 						<Button id="save-obj">

@@ -17,14 +17,19 @@ export default function NewCostsTables({
 	costs,
 	handleCosts,
 	numberOfClassrooms,
+	excelData,
 }) {
 	if (!project) return <></>;
 	if (project.length - 1 !== costs.calculatedCosts.length) return <></>;
-	console.log("numero de aulas", numberOfClassrooms);
+
 	// por el orden de obtencion de las versiones!
+
+	console.log("project::::::", project);
+	console.log("costs::::::::", costs);
+	console.log("data excel ::::::", excelData);
 	return (
 		<>
-			{project
+			{/* {project
 				?.filter((el) => el.parent_id !== 0)
 				.map((el, i) => (
 					<VersionTable
@@ -35,14 +40,26 @@ export default function NewCostsTables({
 						i={i}
 						handleCosts={handleCosts}
 						numberOfClassrooms={numberOfClassrooms}
+						excelData={excelData}
 					/>
-				))}
+				))} */}
+			<VersionTable
+				// key={el.id}
+				// el={el}
+				costsCategories={costs.costsCategories}
+				calculatedCosts={costs.calculatedCosts}
+				//i={i}
+				handleCosts={handleCosts}
+				numberOfClassrooms={numberOfClassrooms}
+				excelData={excelData}
+			/>
 		</>
 	);
 }
 
 function VersionTable({
 	el,
+	excelData,
 	costsCategories,
 	calculatedCosts,
 	handleCosts,
@@ -52,7 +69,8 @@ function VersionTable({
 	const VAR_PRECIO_MT2 = 60;
 	const [loading, setLoading] = useState(false);
 
-	const area_total = JSON.parse(el.build_data).result_data.area_total;
+	const area_total = 3000;
+	//JSON.parse(el.build_data).result_data.area_total;
 
 	// const areaMt2Inicial = VAR_PRECIO_MT2 * numberOfClassrooms.inicial;
 	// const areaMt2Primaria = VAR_PRECIO_MT2 * numberOfClassrooms.primaria;
@@ -61,14 +79,15 @@ function VersionTable({
 	// 	VAR_PRECIO * console.log("precio de aulas inicial", areaMt2Inicial);
 
 	const total_structure =
-		(calculatedCosts.muros_y_columnas + calculatedCosts.techos) *
+		(calculatedCosts[0].muros_y_columnas + calculatedCosts[0].techos) *
 		area_total;
+	console.log("totalstruduu:::", total_structure);
 	const total_finishes =
-		(calculatedCosts.puertas_y_ventanas +
-			calculatedCosts.revestimientos +
-			calculatedCosts.banos) *
+		(calculatedCosts[0].puertas_y_ventanas +
+			calculatedCosts[0].revestimientos +
+			calculatedCosts[0].banos) *
 		area_total;
-	const total_installations = calculatedCosts.instalaciones * area_total;
+	const total_installations = calculatedCosts[0].instalaciones * area_total;
 
 	const rows = [
 		createData(
